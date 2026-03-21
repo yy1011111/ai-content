@@ -54,6 +54,7 @@ model ContentStrategy {
   corePainPoints   String   @db.Text @map("core_pain_points")
   writingAngles    String   @db.Text @map("writing_angles")
   toneAndStyle     String?  @db.Text @map("tone_and_style")
+  sourceIds        String[] @default([]) @map("source_ids")
   isDefault        Boolean  @default(false) @map("is_default")
   enabled          Boolean  @default(true)
 

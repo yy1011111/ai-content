@@ -45,10 +45,10 @@ export class CrawlProcessor extends WorkerHost {
       // 保存结果（去重）
       const { savedCount, createdMaterialIds } = await this.rssCrawler.saveResults(results);
 
-      // 采集完成后立即为新素材尝试补齐真实图片，提升后续文章生成时的原图命中率
+      // 先保证素材快速落库，避免图片补提把整条采集队列阻塞住。
+      // 需要配图时，可以在后续内容生成阶段再做兜底补图。
       if (createdMaterialIds.length > 0) {
-        const imageResult = await this.rssCrawler.extractImagesForMaterialIds(createdMaterialIds);
-        this.logger.log(`新素材图片补提完成: 处理 ${imageResult.processed} 条，成功 ${imageResult.success} 条`);
+        this.logger.log(`本次采集新增 ${createdMaterialIds.length} 条素材，跳过同步补图以提升采集吞吐`);
       }
 
       // 可选：对没有 content 的素材用 Jina Reader 提取全文
