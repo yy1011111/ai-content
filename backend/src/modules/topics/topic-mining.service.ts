@@ -96,8 +96,8 @@ export class TopicMiningService {
     const modelId = await this.getTopicSelectionModelId();
     const strategy = await this.contentStrategiesService.getDefaultStrategy();
     const analysis = await this.analyzeSeed(modelId, seed);
-    const retrieval = await this.collectMaterialsForSeed(seed, analysis);
-    const materials = await this.findMaterialsForSeed(seed, analysis);
+    const retrieval = await this.collectMaterialsForSeed(strategy, seed, analysis);
+    const materials = await this.findMaterialsForSeed(strategy, seed, analysis);
 
     if (materials.length === 0) {
       return {
@@ -129,6 +129,8 @@ export class TopicMiningService {
   // 一键挖掘：聚合素材 → 分批并发 AI 打分 → 入库
   async mineTopics(hours = 72): Promise<{ created: number; message: string }> {
     const modelId = await this.getTopicSelectionModelId();
+    const strategy = await this.contentStrategiesService.getDefaultStrategy();
+    const sourceFilter = this.buildMaterialSourceFilter(strategy.sourceIds || []);
 
     // 查询近 N 小时内的未挖掘素材，且挖掘次数低于 2
     const timeThreshold = new Date(Date.now() - hours * 60 * 60 * 1000);
@@ -138,6 +140,7 @@ export class TopicMiningService {
         status: 'unmined',
         collectDate: { gte: timeThreshold },
         miningCount: { lt: 2 },
+        ...sourceFilter,
       },
       orderBy: { collectDate: 'desc' },
       // 移除 take: 50 限制，读取所有符合条件的素材
@@ -322,17 +325,23 @@ ${seed}
     };
   }
 
-  private async findMaterialsForSeed(seed: string, analysis: SeedAnalysis) {
+  private async findMaterialsForSeed(
+    strategy: { sourceIds?: string[] },
+    seed: string,
+    analysis: SeedAnalysis,
+  ) {
     const recentThreshold = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
     const terms = this.uniqueStrings(
       analysis.keywords,
       this.extractFallbackKeywords(seed),
     ).slice(0, 8);
+    const sourceFilter = this.buildMaterialSourceFilter(strategy.sourceIds || []);
 
     const matched = await this.prisma.material.findMany({
       where: {
         collectDate: { gte: recentThreshold },
         status: { in: ['unmined', 'mined'] },
+        ...sourceFilter,
         OR: terms.flatMap((term) => [
           { title: { contains: term, mode: 'insensitive' } },
           { summary: { contains: term, mode: 'insensitive' } },
@@ -352,6 +361,7 @@ ${seed}
       where: {
         collectDate: { gte: recentThreshold },
         status: { in: ['unmined', 'mined'] },
+        ...sourceFilter,
       },
       orderBy: { collectDate: 'desc' },
       take: this.DISCOVERY_MATERIAL_LIMIT,
@@ -373,9 +383,18 @@ ${seed}
     return this.rankMaterialsForSeed(merged, analysis).slice(0, this.DISCOVERY_MATERIAL_LIMIT);
   }
 
-  private async collectMaterialsForSeed(seed: string, analysis: SeedAnalysis): Promise<SeedRetrievalSummary> {
+  private async collectMaterialsForSeed(
+    strategy: { sourceIds?: string[] },
+    seed: string,
+    analysis: SeedAnalysis,
+  ): Promise<SeedRetrievalSummary> {
     const rawSources = await this.prisma.source.findMany({
-      where: { enabled: true },
+      where: {
+        enabled: true,
+        ...(strategy.sourceIds && strategy.sourceIds.length > 0
+          ? { id: { in: strategy.sourceIds } }
+          : {}),
+      },
       orderBy: [{ createdAt: 'desc' }],
     });
     const sources = rawSources
@@ -408,10 +427,23 @@ ${seed}
           : source.type === 'rss'
             ? await this.rssCrawler.crawl(source.url, platform)
             : [];
+        const taggedResults = results.map((result) => ({
+          ...result,
+          metadata: {
+            ...this.toRecord(result.metadata),
+            retrieval: {
+              ...this.toRecord(this.toRecord(result.metadata).retrieval),
+              sourceId: source.id,
+              sourceName: source.name,
+              sourceType: source.type,
+              sourceUrl: source.url,
+            },
+          },
+        }));
 
-        fetchedCount += results.length;
+        fetchedCount += taggedResults.length;
 
-        const candidates = this.evaluateRetrievedResults(results, analysis, relevanceTerms, platform).slice(
+        const candidates = this.evaluateRetrievedResults(taggedResults, analysis, relevanceTerms, platform).slice(
           0,
           this.DISCOVERY_RESULT_PER_SOURCE * 2,
         );
@@ -443,6 +475,7 @@ ${seed}
       metadata: {
         signal,
         retrieval: {
+          ...this.toRecord(this.toRecord(result.metadata).retrieval),
           stage: 'seed_discovery',
           seed: seed,
           normalizedSeed: analysis.normalizedSeed,
@@ -1036,6 +1069,25 @@ ${JSON.stringify(materialList)}
     const text = `${result.title} ${result.summary}`.toLowerCase();
     const matchedKeyword = analysis.keywords.find((keyword) => text.includes(keyword.toLowerCase()));
     return matchedKeyword || analysis.normalizedSeed;
+  }
+
+  private buildMaterialSourceFilter(sourceIds: string[]) {
+    if (!sourceIds || sourceIds.length === 0) {
+      return {};
+    }
+
+    return {
+      AND: [
+        {
+          OR: sourceIds.map((sourceId) => ({
+            metadata: {
+              path: ['retrieval', 'sourceId'],
+              equals: sourceId,
+            },
+          })),
+        },
+      ],
+    };
   }
 
   private getSourceWeightForPlatform(platform: string) {

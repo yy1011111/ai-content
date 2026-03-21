@@ -10,6 +10,7 @@ export interface ContentStrategy {
   corePainPoints: string;
   writingAngles: string;
   toneAndStyle?: string | null;
+  sourceIds: string[];
   isDefault: boolean;
   enabled: boolean;
   createdAt: string;
@@ -25,6 +26,7 @@ export interface ContentStrategyPayload {
   corePainPoints: string;
   writingAngles: string;
   toneAndStyle?: string;
+  sourceIds?: string[];
   isDefault?: boolean;
   enabled?: boolean;
 }

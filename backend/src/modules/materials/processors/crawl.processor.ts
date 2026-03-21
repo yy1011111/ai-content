@@ -43,7 +43,20 @@ export class CrawlProcessor extends WorkerHost {
       }
 
       // 保存结果（去重）
-      const { savedCount, createdMaterialIds } = await this.rssCrawler.saveResults(results);
+      const normalizedResults = results.map((item: any) => ({
+        ...item,
+        metadata: {
+          ...(item.metadata || {}),
+          retrieval: {
+            ...((item.metadata || {}).retrieval || {}),
+            sourceId,
+            sourceName,
+            sourceType,
+            sourceUrl,
+          },
+        },
+      }));
+      const { savedCount, createdMaterialIds } = await this.rssCrawler.saveResults(normalizedResults);
 
       // 先保证素材快速落库，避免图片补提把整条采集队列阻塞住。
       // 需要配图时，可以在后续内容生成阶段再做兜底补图。
@@ -56,7 +69,7 @@ export class CrawlProcessor extends WorkerHost {
 
       // 更新信息源的最后采集时间
       if (sourceId) {
-        await this.prisma.source.update({
+        await this.prisma.source.updateMany({
           where: { id: sourceId },
           data: { lastCrawlTime: new Date() },
         });

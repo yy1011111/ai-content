@@ -199,4 +199,49 @@ describe('TopicMiningService', () => {
     expect(contentStrategiesService.getDefaultStrategy).toHaveBeenCalled();
     expect(systemLogsService.record).toHaveBeenCalled();
   });
+
+  it('only queries materials from bound sources when the strategy has sourceIds', async () => {
+    const { service, prisma, contentStrategiesService } = createService();
+
+    contentStrategiesService.getDefaultStrategy.mockResolvedValue({
+      name: '公众号热点深度策略',
+      industry: '公众号内容创作',
+      targetAudience: '公众号读者',
+      commercialGoal: '提升阅读量',
+      corePainPoints: '不会筛热点',
+      writingAngles: '热点解读',
+      toneAndStyle: '清晰有观点',
+      sourceIds: ['source-wechat', 'source-zhihu'],
+    });
+
+    prisma.material.findMany.mockResolvedValue([]);
+
+    const result = await service.mineTopics();
+
+    expect(result.created).toBe(0);
+    expect(prisma.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [
+            {
+              OR: [
+                {
+                  metadata: {
+                    path: ['retrieval', 'sourceId'],
+                    equals: 'source-wechat',
+                  },
+                },
+                {
+                  metadata: {
+                    path: ['retrieval', 'sourceId'],
+                    equals: 'source-zhihu',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+  });
 });

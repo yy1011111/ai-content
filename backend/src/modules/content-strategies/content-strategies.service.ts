@@ -10,6 +10,7 @@ export interface ContentStrategyPayload {
   corePainPoints: string;
   writingAngles: string;
   toneAndStyle?: string;
+  sourceIds?: string[];
   isDefault?: boolean;
   enabled?: boolean;
 }
@@ -49,6 +50,7 @@ export class ContentStrategiesService {
 
   async create(data: ContentStrategyPayload) {
     await this.ensureDefaultStrategy();
+    const sourceIds = await this.normalizeSourceIds(data.sourceIds);
 
     if (data.isDefault) {
       await this.prisma.contentStrategy.updateMany({
@@ -62,6 +64,7 @@ export class ContentStrategiesService {
         data: {
           ...data,
           industry: data.industry || '通用',
+          sourceIds,
           enabled: data.enabled ?? true,
         },
       });
@@ -75,6 +78,9 @@ export class ContentStrategiesService {
 
   async update(id: string, data: Partial<ContentStrategyPayload>) {
     const strategy = await this.findOne(id);
+    const sourceIds = data.sourceIds === undefined
+      ? undefined
+      : await this.normalizeSourceIds(data.sourceIds);
 
     if (data.isDefault) {
       await this.prisma.contentStrategy.updateMany({
@@ -92,7 +98,10 @@ export class ContentStrategiesService {
     try {
       return await this.prisma.contentStrategy.update({
         where: { id },
-        data,
+        data: {
+          ...data,
+          ...(sourceIds === undefined ? {} : { sourceIds }),
+        },
       });
     } catch (error: any) {
       if (error.code === 'P2002') {
@@ -145,9 +154,34 @@ export class ContentStrategiesService {
         corePainPoints: '不会选题、内容太空泛、缺少转化钩子、担心被时代淘汰、想用 AI 提升产出但没有可落地方法',
         writingAngles: '趋势解读、痛点拆解、认知反转、实操方法、案例拆解',
         toneAndStyle: '务实、通俗、带结论、强调对普通人的具体价值，避免过度炫技',
+        sourceIds: [],
         isDefault: true,
         enabled: true,
       },
     });
+  }
+
+  private async normalizeSourceIds(sourceIds?: string[]) {
+    const normalized = Array.from(
+      new Set(
+        (sourceIds || [])
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean),
+      ),
+    );
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const count = await this.prisma.source.count({
+      where: { id: { in: normalized } },
+    });
+
+    if (count !== normalized.length) {
+      throw new BadRequestException('部分采集源不存在，请刷新后重试');
+    }
+
+    return normalized;
   }
 }
