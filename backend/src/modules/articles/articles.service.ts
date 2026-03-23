@@ -304,8 +304,12 @@ export class ArticlesService {
     }
 
     // ================= 批量操作：定时任务按门槛生成草稿 =================
-    async batchGenerateDrafts(limit: number = 5, minScore: number = 80) {
-        this.logger.log(`开始执行批量生成草稿任务，寻找 AI 评分 >= ${minScore} 的待处理选题，最多处理 ${limit} 个...`);
+    async batchGenerateDrafts(
+        limit: number = 5,
+        minScore: number = 80,
+        contentType: ArticleContentType = 'article',
+    ) {
+        this.logger.log(`开始执行批量生成草稿任务，寻找 AI 评分 >= ${minScore} 的待处理选题，最多处理 ${limit} 个，内容类型：${contentType}...`);
 
         const topics = await this.prisma.topic.findMany({
             where: {
@@ -331,7 +335,7 @@ export class ArticlesService {
         for (const topic of topics) {
             try {
                 this.logger.log(`>>> 批量生成进度: 正在处理选题 「${topic.title}」 (分数: ${topic.aiScore})`);
-                const article = await this.generateFromTopic(topic.id, false);
+                const article = await this.generateFromTopic(topic.id, false, contentType);
                 generatedArticleIds.push(article.id);
                 successCount++;
             } catch (err) {

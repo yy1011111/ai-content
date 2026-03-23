@@ -1,11 +1,16 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { QueryMaterialDto } from './dto/query-material.dto';
-import { Prisma } from '@prisma/client';
 import { RssCrawlerService } from './crawlers/rss.crawler';
+import { XiaohongshuKeywordCrawlerService } from './crawlers/xiaohongshu-keyword-crawler.service';
+import {
+  XiaohongshuSortType,
+  XiaohongshuTimeRangeType,
+} from './dto/xiaohongshu-keyword-collect.dto';
 
 @Injectable()
 export class MaterialsService {
@@ -16,11 +21,19 @@ export class MaterialsService {
     private systemLogsService: SystemLogsService,
     @InjectQueue('crawl-queue') private crawlQueue: Queue,
     private rssCrawler: RssCrawlerService,
-  ) { }
+    private xiaohongshuKeywordCrawler: XiaohongshuKeywordCrawlerService,
+  ) {}
 
-  // 分页查询素材列表
   async findAll(query: QueryMaterialDto) {
-    const { page = 1, limit = 20, keyword, status, platform, sortBy = 'collectDate', sortOrder = 'desc' } = query;
+    const {
+      page = 1,
+      limit = 20,
+      keyword,
+      status,
+      platform,
+      sortBy = 'collectDate',
+      sortOrder = 'desc',
+    } = query;
 
     const where: Prisma.MaterialWhereInput = {};
 
@@ -33,8 +46,19 @@ export class MaterialsService {
     if (platform) {
       where.platform = platform;
     }
+    if (query.category) {
+      const andFilters = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+      where.AND = [
+        ...andFilters,
+        {
+          metadata: {
+            path: ['materialCategory'],
+            equals: query.category,
+          },
+        } as any,
+      ];
+    }
 
-    // 映射前端字段名到数据库字段名
     const sortFieldMap: Record<string, string> = {
       collectDate: 'collectDate',
       publishDate: 'publishDate',
@@ -62,20 +86,19 @@ export class MaterialsService {
     };
   }
 
-  // 获取单个素材
   async findOne(id: string) {
     const material = await this.prisma.material.findUnique({ where: { id } });
-    if (!material) throw new NotFoundException('素材不存在');
+    if (!material) {
+      throw new NotFoundException('素材不存在');
+    }
     return material;
   }
 
-  // 删除素材
   async remove(id: string) {
     await this.findOne(id);
     return this.prisma.material.delete({ where: { id } });
   }
 
-  // 批量删除
   async batchRemove(ids: string[]) {
     const result = await this.prisma.material.deleteMany({
       where: { id: { in: ids } },
@@ -83,9 +106,7 @@ export class MaterialsService {
     return { deleted: result.count };
   }
 
-  // 触发采集任务
   async triggerCollect(sourceIds?: string[]) {
-    // 查询启用的信息源
     const where: Prisma.SourceWhereInput = { enabled: true };
     if (sourceIds && sourceIds.length > 0) {
       where.id = { in: sourceIds };
@@ -114,11 +135,44 @@ export class MaterialsService {
     }
 
     this.logger.log(`已添加 ${sources.length} 个采集任务到队列`);
-    await this.systemLogsService.record(`🚀 启动了基于 ${sources.length} 个平台的爬虫采集任务`, 'info');
+    await this.systemLogsService.record(`启动了基于 ${sources.length} 个平台的爬虫采集任务`, 'info');
     return { jobCount: sources.length, message: '采集任务已启动' };
   }
 
-  // 素材统计
+  async openXiaohongshuLogin() {
+    const result = await this.xiaohongshuKeywordCrawler.startLogin();
+    await this.systemLogsService.record(
+      result.success ? '小红书登录授权成功，可开始关键词采集' : `小红书登录授权未完成：${result.message}`,
+      result.success ? 'success' : 'warning',
+    );
+    return result;
+  }
+
+  async collectXiaohongshuByKeyword(
+    keyword: string,
+    limit: number = 12,
+    sort: XiaohongshuSortType = 'general',
+    timeRange: XiaohongshuTimeRangeType = '7d',
+  ) {
+    const results = await this.xiaohongshuKeywordCrawler.collectByKeyword(keyword, limit, sort, timeRange);
+    const { savedCount, createdMaterialIds } = await this.rssCrawler.saveResults(results);
+
+    await this.systemLogsService.record(
+      `小红书关键词「${keyword}」采集完成：排序 ${sort}，时间范围 ${timeRange}，抓取 ${results.length} 条，入库 ${savedCount} 条`,
+      'success',
+    );
+
+    return {
+      keyword,
+      sort,
+      timeRange,
+      total: results.length,
+      saved: savedCount,
+      createdMaterialIds,
+      message: `关键词「${keyword}」采集完成（排序：${sort}，时间范围：${timeRange}），抓取 ${results.length} 条，入库 ${savedCount} 条`,
+    };
+  }
+
   async getStats() {
     const [total, unmined, mined, failed] = await Promise.all([
       this.prisma.material.count(),
@@ -127,7 +181,6 @@ export class MaterialsService {
       this.prisma.material.count({ where: { status: 'failed' } }),
     ]);
 
-    // 按平台统计
     const byPlatform = await this.prisma.material.groupBy({
       by: ['platform'],
       _count: { id: true },
@@ -138,14 +191,13 @@ export class MaterialsService {
       unmined,
       mined,
       failed,
-      byPlatform: byPlatform.map((p) => ({
-        platform: p.platform,
-        count: p._count.id,
+      byPlatform: byPlatform.map((platform) => ({
+        platform: platform.platform,
+        count: platform._count.id,
       })),
     };
   }
 
-  // 为指定素材补齐真实图片，供文章生成前兜底使用
   async ensureImagesForMaterials(materialIds: string[]) {
     return this.rssCrawler.extractImagesForMaterialIds(materialIds);
   }

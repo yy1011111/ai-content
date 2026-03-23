@@ -6,31 +6,37 @@ describe('ArticlesService', () => {
     selectImageImpl?: jest.Mock;
     generateCoverImageImpl?: jest.Mock;
     uploadBufferImpl?: jest.Mock;
+    prisma?: Record<string, any>;
+    defaultModels?: Record<string, any>;
+    materialsService?: Record<string, any>;
   }) => {
     const generateImpl = options?.generateImpl ?? jest.fn();
     const selectImageImpl = options?.selectImageImpl ?? jest.fn();
     const generateCoverImageImpl = options?.generateCoverImageImpl ?? jest.fn();
     const uploadBufferImpl = options?.uploadBufferImpl ?? jest.fn().mockResolvedValue(null);
+    const prisma = options?.prisma ?? {};
     const aiClient = { generate: generateImpl };
+    const defaultModels = options?.defaultModels ?? {};
     const systemLogsService = { record: jest.fn().mockResolvedValue(undefined) };
     const imageSelector = {
       selectImage: selectImageImpl,
       generateCoverImage: generateCoverImageImpl,
     };
+    const materialsService = options?.materialsService ?? {};
     const qiniuService = {
       uploadBuffer: uploadBufferImpl,
     };
     const service = new ArticlesService(
-      {} as any,
+      prisma as any,
       aiClient as any,
-      {} as any,
+      defaultModels as any,
       systemLogsService as any,
       imageSelector as any,
-      {} as any,
+      materialsService as any,
       qiniuService as any,
     );
 
-    return { service, aiClient, systemLogsService, imageSelector, qiniuService };
+    return { service, prisma, aiClient, defaultModels, systemLogsService, imageSelector, materialsService, qiniuService };
   };
 
   it('在 HTML 首次截断时会复用同一轮上下文续写补全', async () => {
@@ -298,5 +304,38 @@ HTML_END`);
 
     expect(qiniuService.uploadBuffer).toHaveBeenCalled();
     expect(result.slides[0].cardImageUrl).toBe('https://cdn.example.com/xhs-card-01.png');
+  });
+
+  it('批量生成草稿时会按指定内容类型调用生成流程', async () => {
+    const prisma = {
+      topic: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'topic-1', title: '第一条', aiScore: 92 },
+          { id: 'topic-2', title: '第二条', aiScore: 88 },
+        ]),
+      },
+    };
+    const { service } = createService({ prisma });
+    const generateFromTopic = jest
+      .spyOn(service, 'generateFromTopic')
+      .mockResolvedValue({ id: 'article-1' } as any);
+
+    const result = await service.batchGenerateDrafts(2, 85, 'xiaohongshu');
+
+    expect(prisma.topic.findMany).toHaveBeenCalledWith({
+      where: {
+        status: 'completed',
+        isPublished: false,
+        aiScore: { gte: 85 },
+      },
+      orderBy: {
+        aiScore: 'desc',
+      },
+      take: 2,
+    });
+    expect(generateFromTopic).toHaveBeenNthCalledWith(1, 'topic-1', false, 'xiaohongshu');
+    expect(generateFromTopic).toHaveBeenNthCalledWith(2, 'topic-2', false, 'xiaohongshu');
+    expect(result.successCount).toBe(2);
+    expect(result.generatedArticleIds).toEqual(['article-1', 'article-1']);
   });
 });

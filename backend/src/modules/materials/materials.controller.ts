@@ -1,9 +1,10 @@
-import { Controller, Get, Delete, Post, Param, Query, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MaterialsService } from './materials.service';
 import { QueryMaterialDto } from './dto/query-material.dto';
 import { BatchDeleteDto } from './dto/batch-delete.dto';
 import { CollectDto } from './dto/collect.dto';
+import { XiaohongshuKeywordCollectDto } from './dto/xiaohongshu-keyword-collect.dto';
 
 @ApiTags('素材管理')
 @Controller('materials')
@@ -32,6 +33,18 @@ export class MaterialsController {
   @ApiOperation({ summary: '触发素材采集任务' })
   collect(@Body() dto: CollectDto) {
     return this.service.triggerCollect(dto.sourceIds);
+  }
+
+  @Post('xiaohongshu/login')
+  @ApiOperation({ summary: '打开小红书登录授权窗口' })
+  loginXiaohongshu() {
+    return this.service.openXiaohongshuLogin();
+  }
+
+  @Post('xiaohongshu/keyword-collect')
+  @ApiOperation({ summary: '按关键词采集小红书热门笔记参考素材' })
+  collectXiaohongshuByKeyword(@Body() dto: XiaohongshuKeywordCollectDto) {
+    return this.service.collectXiaohongshuByKeyword(dto.keyword, dto.limit, dto.sort, dto.timeRange);
   }
 
   @Delete(':id')

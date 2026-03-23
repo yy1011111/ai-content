@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
@@ -28,13 +28,14 @@ import {
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { columns, statusMap } from "./data";
-import { materialsApi, Material } from "@/lib/api/materials";
+import { materialsApi, Material, XiaohongshuSortType, XiaohongshuTimeRangeType } from "@/lib/api/materials";
 import ReactMarkdown from "react-markdown";
 
 export default function MaterialsPage() {
     const [filterValue, setFilterValue] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [platformFilter, setPlatformFilter] = useState("all");
+    const [categoryFilter, setCategoryFilter] = useState("all");
     const [selectedKeys, setSelectedKeys] = useState<Selection>(new Set([]));
     const [page, setPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -43,9 +44,14 @@ export default function MaterialsPage() {
         direction: "descending",
     });
     const [isCollecting, setIsCollecting] = useState(false);
+    const [isXiaohongshuLoggingIn, setIsXiaohongshuLoggingIn] = useState(false);
+    const [isXiaohongshuCollecting, setIsXiaohongshuCollecting] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    const [xiaohongshuKeyword, setXiaohongshuKeyword] = useState("");
+    const [xiaohongshuSort, setXiaohongshuSort] = useState<XiaohongshuSortType>("general");
+    const [xiaohongshuTimeRange, setXiaohongshuTimeRange] = useState<XiaohongshuTimeRangeType>("7d");
 
-    // 服务端数据状态
+    // 鏈嶅姟绔暟鎹姸鎬?
     const [items, setItems] = useState<Material[]>([]);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -54,14 +60,14 @@ export default function MaterialsPage() {
     const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
     const { isOpen, onOpen, onClose } = useDisclosure();
 
-    // 用于搜索防抖的计时器
+    // 鐢ㄤ簬鎼滅储闃叉姈鐨勮鏃跺櫒
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // 从服务端获取数据
+    // 浠庢湇鍔＄鑾峰彇鏁版嵁
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
-            // 构建排序字段映射
+            // 鏋勫缓鎺掑簭瀛楁鏄犲皠
             const sortBy = sortDescriptor.column as string;
             const sortOrder = sortDescriptor.direction === "descending" ? "desc" : "asc";
 
@@ -72,6 +78,7 @@ export default function MaterialsPage() {
                     keyword: filterValue || undefined,
                     status: statusFilter !== "all" ? statusFilter : undefined,
                     platform: platformFilter !== "all" ? platformFilter : undefined,
+                    category: categoryFilter !== "all" ? categoryFilter : undefined,
                     sortBy,
                     sortOrder,
                 }),
@@ -87,15 +94,15 @@ export default function MaterialsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [page, rowsPerPage, filterValue, statusFilter, platformFilter, sortDescriptor]);
+    }, [page, rowsPerPage, filterValue, statusFilter, platformFilter, categoryFilter, sortDescriptor]);
 
-    // 筛选条件变化时重新请求
+    // 绛涢€夋潯浠跺彉鍖栨椂閲嶆柊璇锋眰
     useEffect(() => {
         setIsMounted(true);
         fetchData();
     }, [fetchData]);
 
-    // 搜索输入防抖处理
+    // 鎼滅储杈撳叆闃叉姈澶勭悊
     const onSearchChange = useCallback((value?: string) => {
         if (debounceRef.current) {
             clearTimeout(debounceRef.current);
@@ -106,7 +113,7 @@ export default function MaterialsPage() {
         }, 300);
     }, []);
 
-    // 筛选条件变化时重置页码
+    // 绛涢€夋潯浠跺彉鍖栨椂閲嶇疆椤电爜
     const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         setStatusFilter(e.target.value);
         setPage(1);
@@ -117,7 +124,12 @@ export default function MaterialsPage() {
         setPage(1);
     }, []);
 
-    // 触发自动采集任务
+    const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+        setCategoryFilter(e.target.value);
+        setPage(1);
+    }, []);
+
+    // 瑙﹀彂鑷姩閲囬泦浠诲姟
     const handleCollect = useCallback(async () => {
         setIsCollecting(true);
         try {
@@ -132,7 +144,45 @@ export default function MaterialsPage() {
         }
     }, [fetchData]);
 
-    // 批量删除
+    const handleXiaohongshuLogin = useCallback(async () => {
+        setIsXiaohongshuLoggingIn(true);
+        try {
+            const result = await materialsApi.loginXiaohongshu();
+            addToast({
+                title: result.success ? "登录状态可用" : "登录未完成",
+                description: result.message,
+                color: result.success ? "success" : "warning",
+            });
+        } catch (e: any) {
+            addToast({ title: "打开登录窗口失败", description: e.message, color: "danger" });
+        } finally {
+            setIsXiaohongshuLoggingIn(false);
+        }
+    }, []);
+
+    const handleXiaohongshuKeywordCollect = useCallback(async () => {
+        const keyword = xiaohongshuKeyword.trim();
+        if (!keyword) {
+            addToast({ title: "请输入关键词", description: "例如：早春穿搭 / 小个子 ootd / 黄黑皮口红", color: "warning" });
+            return;
+        }
+
+        setIsXiaohongshuCollecting(true);
+        try {
+            const result = await materialsApi.collectXiaohongshuKeyword(keyword, 12, xiaohongshuSort, xiaohongshuTimeRange);
+            addToast({ title: "小红书关键词采集完成", description: result.message, color: "success" });
+            setCategoryFilter("xiaohongshu_reference");
+            setPlatformFilter("Xiaohongshu");
+            setPage(1);
+            await fetchData();
+        } catch (e: any) {
+            addToast({ title: "小红书关键词采集失败", description: e.message, color: "danger" });
+        } finally {
+            setIsXiaohongshuCollecting(false);
+        }
+    }, [fetchData, xiaohongshuKeyword, xiaohongshuSort, xiaohongshuTimeRange]);
+
+    // 鎵归噺鍒犻櫎
     const handleBulkDelete = useCallback(async () => {
         const ids = selectedKeys === "all"
             ? items.map(item => item.id)
@@ -150,7 +200,7 @@ export default function MaterialsPage() {
         }
     }, [selectedKeys, items, fetchData]);
 
-    // 单条删除
+    // 鍗曟潯鍒犻櫎
     const handleDelete = useCallback(async (id: string) => {
         try {
             await materialsApi.remove(id);
@@ -161,7 +211,7 @@ export default function MaterialsPage() {
         }
     }, [fetchData]);
 
-    // 查看详情
+    // 鏌ョ湅璇︽儏
     const handleView = useCallback((item: Material) => {
         setSelectedMaterial(item);
         onOpen();
@@ -176,6 +226,35 @@ export default function MaterialsPage() {
         "V2EX": "V2EX",
         "X/Twitter": "X (Twitter)",
         "Tophub": "今日热榜",
+        "Xiaohongshu": "小红书",
+    };
+
+    const categoryLabelMap: Record<string, string> = {
+        xiaohongshu_reference: "小红书参考",
+        external_trend: "外部热点",
+    };
+
+    const renderSignalValue = (value?: string | null) => value || "-";
+
+    const parseSignalValue = (value?: string | null) => {
+        if (!value) return 0;
+        const normalized = value.replace(/,/g, "").trim().toLowerCase();
+        if (!normalized) return 0;
+        if (normalized.endsWith("w") || normalized.endsWith("万")) {
+            return (Number.parseFloat(normalized.slice(0, -1)) || 0) * 10000;
+        }
+        if (normalized.endsWith("k") || normalized.endsWith("千")) {
+            return (Number.parseFloat(normalized.slice(0, -1)) || 0) * 1000;
+        }
+        return Number.parseFloat(normalized) || 0;
+    };
+
+    const signalTone = (value?: string | null) => {
+        const score = parseSignalValue(value);
+        if (score >= 1000) return "danger" as const;
+        if (score >= 300) return "warning" as const;
+        if (score > 0) return "secondary" as const;
+        return "default" as const;
     };
 
     const renderCell = useCallback((item: Material, columnKey: React.Key) => {
@@ -186,6 +265,23 @@ export default function MaterialsPage() {
                 return (
                     <div className="flex flex-col gap-1 max-w-[300px]">
                         <span className="text-small text-default-900 truncate font-medium">{item.title}</span>
+                        <div className="flex flex-wrap gap-1">
+                            {item.metadata?.materialCategory && (
+                                <Chip size="sm" variant="flat" color="secondary" className="text-tiny h-5">
+                                    {categoryLabelMap[item.metadata.materialCategory] || item.metadata.materialCategory}
+                                </Chip>
+                            )}
+                            {item.metadata?.referenceKeyword && (
+                                <Chip size="sm" variant="flat" color="warning" className="text-tiny h-5">
+                                    关键词：{item.metadata.referenceKeyword}
+                                </Chip>
+                            )}
+                            {item.metadata?.timeRangeLabel && (
+                                <Chip size="sm" variant="flat" color="primary" className="text-tiny h-5">
+                                    {item.metadata.timeRangeLabel}
+                                </Chip>
+                            )}
+                        </div>
                         <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="text-tiny text-primary truncate hover:underline">
                             {item.sourceUrl}
                         </a>
@@ -196,6 +292,24 @@ export default function MaterialsPage() {
                     <Chip size="sm" variant="flat" className="capitalize bg-default-100 text-default-800">
                         {platformDisplayNameMap[item.platform] || item.platform}
                     </Chip>
+                );
+            case "engagement":
+                if (!item.metadata?.signal) {
+                    return <span className="text-small text-default-400">-</span>;
+                }
+
+                return (
+                    <div className="flex flex-wrap gap-1 max-w-[170px]">
+                        <Chip size="sm" variant="flat" color={signalTone(item.metadata.signal.likeCount)} className="text-tiny">
+                            赞 {renderSignalValue(item.metadata.signal.likeCount)}
+                        </Chip>
+                        <Chip size="sm" variant="flat" color={signalTone(item.metadata.signal.collectCount)} className="text-tiny">
+                            藏 {renderSignalValue(item.metadata.signal.collectCount)}
+                        </Chip>
+                        <Chip size="sm" variant="flat" color={signalTone(item.metadata.signal.commentCount)} className="text-tiny">
+                            评 {renderSignalValue(item.metadata.signal.commentCount)}
+                        </Chip>
+                    </div>
                 );
             case "status":
                 const statusConfig = statusMap[item.status];
@@ -298,6 +412,17 @@ export default function MaterialsPage() {
                             ))
                         ]}
                     </Select>
+                    <Select
+                        className="w-[160px]"
+                        size="sm"
+                        selectedKeys={[categoryFilter]}
+                        onChange={handleCategoryChange}
+                        aria-label="素材类别"
+                    >
+                        <SelectItem key="all">全部类别</SelectItem>
+                        <SelectItem key="xiaohongshu_reference">小红书参考</SelectItem>
+                        <SelectItem key="external_trend">外部热点</SelectItem>
+                    </Select>
                     {(selectedKeys === "all" || (selectedKeys as Set<string>).size > 0) && (
                         <Button
                             size="sm"
@@ -312,6 +437,72 @@ export default function MaterialsPage() {
                 </div>
 
                 <div className="flex gap-3 shrink-0">
+                    <Input
+                        classNames={{
+                            base: "w-[220px]",
+                            input: "text-small",
+                            inputWrapper: "bg-default-400/20 dark:bg-default-500/20 backdrop-blur-md",
+                        }}
+                        size="sm"
+                        placeholder="小红书关键词，如：早春穿搭"
+                        value={xiaohongshuKeyword}
+                        onValueChange={setXiaohongshuKeyword}
+                    />
+                    <Select
+                        className="w-[160px]"
+                        size="sm"
+                        selectedKeys={[xiaohongshuSort]}
+                        onSelectionChange={(keys) => {
+                            const selected = Array.from(keys)[0] as XiaohongshuSortType | undefined;
+                            if (selected) {
+                                setXiaohongshuSort(selected);
+                            }
+                        }}
+                        aria-label="小红书排序方式"
+                        disallowEmptySelection
+                    >
+                        <SelectItem key="general">综合推荐</SelectItem>
+                        <SelectItem key="popularity_descending">最多点赞</SelectItem>
+                        <SelectItem key="collect_descending">最多收藏</SelectItem>
+                        <SelectItem key="comment_descending">最多评论</SelectItem>
+                        <SelectItem key="time_descending">最新</SelectItem>
+                    </Select>
+                    <Select
+                        className="w-[140px]"
+                        size="sm"
+                        selectedKeys={[xiaohongshuTimeRange]}
+                        onSelectionChange={(keys) => {
+                            const selected = Array.from(keys)[0] as XiaohongshuTimeRangeType | undefined;
+                            if (selected) {
+                                setXiaohongshuTimeRange(selected);
+                            }
+                        }}
+                        aria-label="小红书时间范围"
+                        disallowEmptySelection
+                    >
+                        <SelectItem key="1d">1天内</SelectItem>
+                        <SelectItem key="7d">7天内</SelectItem>
+                        <SelectItem key="30d">30天内</SelectItem>
+                        <SelectItem key="all">不限</SelectItem>
+                    </Select>
+                    <Button
+                        color="secondary"
+                        variant="flat"
+                        size="sm"
+                        isLoading={isXiaohongshuLoggingIn}
+                        onClick={handleXiaohongshuLogin}
+                    >
+                        登录小红书
+                    </Button>
+                    <Button
+                        color="secondary"
+                        size="sm"
+                        startContent={<Icon icon="solar:fire-linear" width={18} />}
+                        isLoading={isXiaohongshuCollecting}
+                        onClick={handleXiaohongshuKeywordCollect}
+                    >
+                        关键词采集
+                    </Button>
                     <Button
                         color="primary"
                         size="sm"
@@ -363,7 +554,8 @@ export default function MaterialsPage() {
             <header className="rounded-medium border-small border-white/10 flex items-center justify-between gap-3 p-5 bg-background/60 backdrop-blur-md shadow-sm">
                 <div className="flex flex-col">
                     <h2 className="text-xl text-default-900 font-bold">源素材库</h2>
-                    <span className="text-small text-default-500 mt-1">管理从全网各个平台自动爬取的未经加工的图文内容，作为下一步智能选题的"矿池"。</span>
+                    <span className="text-small text-default-500 mt-1">管理从全网各个平台自动抓取的未加工图文内容，作为后续智能选题和内容创作的素材池。</span>
+                    <span className="text-tiny text-default-400 mt-2">小红书关键词采集首次使用前，请先点击“登录小红书”完成一次扫码授权。</span>
                 </div>
             </header>
 
@@ -442,6 +634,16 @@ export default function MaterialsPage() {
                                 <h3 className="text-xl font-bold">{selectedMaterial?.title}</h3>
                                 <div className="flex items-center gap-2 mt-1">
                                     <Chip size="sm" variant="flat">{selectedMaterial?.platform}</Chip>
+                                    {selectedMaterial?.metadata?.materialCategory && (
+                                        <Chip size="sm" variant="flat" color="secondary">
+                                            {categoryLabelMap[selectedMaterial.metadata.materialCategory] || selectedMaterial.metadata.materialCategory}
+                                        </Chip>
+                                    )}
+                                    {selectedMaterial?.metadata?.referenceKeyword && (
+                                        <Chip size="sm" variant="flat" color="warning">
+                                            关键词：{selectedMaterial.metadata.referenceKeyword}
+                                        </Chip>
+                                    )}
                                     <span className="text-tiny text-default-400">{selectedMaterial?.author}</span>
                                     <span className="text-tiny text-default-400">
                                         {selectedMaterial?.collectDate && new Date(selectedMaterial.collectDate).toLocaleString()}

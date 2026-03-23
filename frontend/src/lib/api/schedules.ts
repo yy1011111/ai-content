@@ -3,6 +3,7 @@ import { api } from './client';
 export interface CreateArticlesScheduleConfig {
   minScore?: number;
   limit?: number;
+  contentType?: 'article' | 'xiaohongshu';
   autoPublish?: boolean;
   publishAccountId?: string;
 }

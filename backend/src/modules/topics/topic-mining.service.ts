@@ -130,7 +130,7 @@ export class TopicMiningService {
   async mineTopics(hours = 72): Promise<{ created: number; message: string }> {
     const modelId = await this.getTopicSelectionModelId();
     const strategy = await this.contentStrategiesService.getDefaultStrategy();
-    const sourceFilter = this.buildMaterialSourceFilter(strategy.sourceIds || []);
+    const sourceFilter = await this.buildMaterialSourceFilter(strategy.sourceIds || []);
 
     // 查询近 N 小时内的未挖掘素材，且挖掘次数低于 2
     const timeThreshold = new Date(Date.now() - hours * 60 * 60 * 1000);
@@ -335,7 +335,7 @@ ${seed}
       analysis.keywords,
       this.extractFallbackKeywords(seed),
     ).slice(0, 8);
-    const sourceFilter = this.buildMaterialSourceFilter(strategy.sourceIds || []);
+    const sourceFilter = await this.buildMaterialSourceFilter(strategy.sourceIds || []);
 
     const matched = await this.prisma.material.findMany({
       where: {
@@ -1071,20 +1071,54 @@ ${JSON.stringify(materialList)}
     return matchedKeyword || analysis.normalizedSeed;
   }
 
-  private buildMaterialSourceFilter(sourceIds: string[]) {
+  private async buildMaterialSourceFilter(sourceIds: string[]) {
     if (!sourceIds || sourceIds.length === 0) {
       return {};
+    }
+
+    const sources = await this.prisma.source.findMany({
+      where: { id: { in: sourceIds } },
+      select: { id: true, name: true, url: true, config: true },
+    });
+
+    const orFilters: Record<string, any>[] = sourceIds.map((sourceId) => ({
+      metadata: {
+        path: ['retrieval', 'sourceId'],
+        equals: sourceId,
+      },
+    }));
+
+    const shouldIncludeXiaohongshuKeywordMaterials = sources.some((source) => {
+      const name = source.name.toLowerCase();
+      const url = source.url.toLowerCase();
+      const config = this.toRecord(source.config);
+      const platform = typeof config.platform === 'string' ? config.platform.toLowerCase() : '';
+
+      return (
+        name.includes('小红书') ||
+        url.includes('xiaohongshu') ||
+        platform.includes('xiaohongshu')
+      );
+    });
+
+    if (shouldIncludeXiaohongshuKeywordMaterials) {
+      orFilters.push({
+        AND: [
+          { platform: 'Xiaohongshu' },
+          {
+            metadata: {
+              path: ['sourceKind'],
+              equals: 'keyword_search',
+            },
+          },
+        ],
+      });
     }
 
     return {
       AND: [
         {
-          OR: sourceIds.map((sourceId) => ({
-            metadata: {
-              path: ['retrieval', 'sourceId'],
-              equals: sourceId,
-            },
-          })),
+          OR: orFilters,
         },
       ],
     };

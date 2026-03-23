@@ -18,6 +18,7 @@ import { JuejinCrawler } from './crawlers/juejin.crawler';
 import { Kr36Crawler } from './crawlers/kr36.crawler';
 import { TophubCrawler } from './crawlers/tophub.crawler';
 import { V2exCrawler } from './crawlers/v2ex.crawler';
+import { XiaohongshuKeywordCrawlerService } from './crawlers/xiaohongshu-keyword-crawler.service';
 
 @Module({
   imports: [
@@ -42,7 +43,8 @@ import { V2exCrawler } from './crawlers/v2ex.crawler';
     Kr36Crawler,
     TophubCrawler,
     V2exCrawler,
+    XiaohongshuKeywordCrawlerService,
   ],
-  exports: [MaterialsService, JinaReaderService, ImageFilterService, RssCrawlerService, CrawlerRegistry],
+  exports: [MaterialsService, JinaReaderService, ImageFilterService, RssCrawlerService, CrawlerRegistry, XiaohongshuKeywordCrawlerService],
 })
 export class MaterialsModule {}

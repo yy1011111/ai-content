@@ -48,8 +48,8 @@ const taskTypeMap: Record<string, { title: string; desc: string; icon: string }>
         icon: 'solar:magic-stick-3-linear',
     },
     create_articles: {
-        title: '自动生成文章',
-        desc: '从就绪的精选选题中按默认风格生成草稿',
+        title: '自动生成内容',
+        desc: '从就绪的精选选题中按默认风格批量生成文章或小红书草稿',
         icon: 'solar:document-text-linear',
     },
 };
@@ -87,6 +87,13 @@ export default function SchedulesPage() {
     };
 
     const handleUpdate = async (config: ScheduleConfig) => {
+        const createContentType = config.config?.contentType === 'xiaohongshu' ? 'xiaohongshu' : 'article';
+
+        if (config.taskType === 'create_articles' && createContentType === 'xiaohongshu' && config.config?.autoPublish) {
+            toast.error('小红书自动生成任务当前仅支持保留草稿，暂不支持自动发布');
+            return;
+        }
+
         if (config.taskType === 'create_articles' && config.config?.autoPublish && !config.config?.publishAccountId) {
             toast.error('已开启自动发布，请先选择一个公众号账号');
             return;
@@ -142,6 +149,8 @@ export default function SchedulesPage() {
                         desc: '未知的系统任务',
                         icon: 'solar:settings-linear',
                     };
+                    const createContentType = config.config?.contentType === 'xiaohongshu' ? 'xiaohongshu' : 'article';
+                    const isXiaohongshuTask = config.taskType === 'create_articles' && createContentType === 'xiaohongshu';
 
                     return (
                         <Card key={config.taskType} className="w-full">
@@ -240,6 +249,29 @@ export default function SchedulesPage() {
 
                                 {config.taskType === 'create_articles' && (
                                     <div className="flex flex-col gap-3 mt-1 pt-3 border-t border-dashed border-default-200">
+                                        <p className="text-xs font-semibold text-default-500">生成类型</p>
+                                        <Select
+                                            label="内容类型"
+                                            selectedKeys={[createContentType]}
+                                            onSelectionChange={(keys) => {
+                                                const selected = Array.from(keys)[0] as 'article' | 'xiaohongshu' | undefined;
+                                                if (!selected) return;
+                                                handleChange(config.taskType, 'config', {
+                                                    ...config.config,
+                                                    contentType: selected,
+                                                    autoPublish: selected === 'article' ? Boolean(config.config?.autoPublish) : false,
+                                                    publishAccountId: selected === 'article' ? config.config?.publishAccountId || '' : '',
+                                                });
+                                            }}
+                                            size="sm"
+                                            variant="bordered"
+                                            isDisabled={!config.enabled}
+                                            disallowEmptySelection
+                                        >
+                                            <SelectItem key="article">公众号文章</SelectItem>
+                                            <SelectItem key="xiaohongshu">小红书笔记</SelectItem>
+                                        </Select>
+
                                         <p className="text-xs font-semibold text-default-500">生成门槛卡控保护</p>
                                         <div className="flex gap-3">
                                             <Input
@@ -275,11 +307,13 @@ export default function SchedulesPage() {
                                                 <div>
                                                     <p className="text-sm font-semibold">生成后自动发布</p>
                                                     <p className="text-xs text-default-500">
-                                                        开启后，会将本轮新生成的草稿直接发布到选定的公众号账号。
+                                                        {isXiaohongshuTask
+                                                            ? '当前小红书任务只会自动生成草稿，不会直接发布。'
+                                                            : '开启后，会将本轮新生成的草稿直接发布到选定的公众号账号。'}
                                                     </p>
                                                 </div>
                                                 <Switch
-                                                    isSelected={Boolean(config.config?.autoPublish)}
+                                                    isSelected={!isXiaohongshuTask && Boolean(config.config?.autoPublish)}
                                                     onValueChange={(val) =>
                                                         handleChange(config.taskType, 'config', {
                                                             ...config.config,
@@ -288,11 +322,11 @@ export default function SchedulesPage() {
                                                         })
                                                     }
                                                     color="primary"
-                                                    isDisabled={!config.enabled}
+                                                    isDisabled={!config.enabled || isXiaohongshuTask}
                                                 />
                                             </div>
 
-                                            {config.config?.autoPublish && (
+                                            {!isXiaohongshuTask && config.config?.autoPublish && (
                                                 <Select
                                                     className="mt-3"
                                                     label="发布到公众号账号"

@@ -14,6 +14,10 @@ export interface CrawlResult {
   author: string;
   publishDate: Date | null;
   platform: string;
+  keywords?: string[];
+  imageUrl?: string | null;
+  originalImageUrl?: string | null;
+  hasImage?: boolean;
   metadata?: Record<string, any> | null;
 }
 
@@ -79,11 +83,14 @@ export class RssCrawlerService {
         });
         if (existing) {
           const mergedMetadata = this.mergeMetadata(existing.metadata, item.metadata);
-          if (mergedMetadata) {
+          const mergedKeywords = Array.from(new Set([...(existing.keywords || []), ...(item.keywords || [])]));
+          const shouldUpdateKeywords = mergedKeywords.length !== (existing.keywords || []).length;
+          if (mergedMetadata || shouldUpdateKeywords) {
             await this.prisma.material.update({
               where: { id: existing.id },
               data: {
-                metadata: mergedMetadata,
+                metadata: mergedMetadata ?? undefined,
+                keywords: mergedKeywords,
               },
             });
             updatedCount++;
@@ -103,7 +110,10 @@ export class RssCrawlerService {
             publishDate: item.publishDate,
             platform: item.platform,
             status: 'unmined',
-            keywords: [],
+            keywords: item.keywords || [],
+            imageUrl: item.imageUrl ?? undefined,
+            originalImageUrl: item.originalImageUrl ?? item.imageUrl ?? undefined,
+            hasImage: item.hasImage ?? Boolean(item.imageUrl || item.originalImageUrl),
             metadata: item.metadata ?? undefined,
           },
         });

@@ -18,6 +18,11 @@ export class QueryMaterialDto extends PaginationDto {
   @IsString()
   platform?: string;
 
+  @ApiPropertyOptional({ description: '素材类别筛选，如 xiaohongshu_reference' })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
   @ApiPropertyOptional({ description: '排序字段', default: 'collectDate' })
   @IsOptional()
   @IsString()

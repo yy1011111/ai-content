@@ -20,6 +20,26 @@ function Test-PortListening {
   return $null -ne (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
 }
 
+function Wait-ForPort {
+  param(
+    [Parameter(Mandatory = $true)]
+    [int]$Port,
+    [int]$TimeoutSeconds = 60,
+    [int]$IntervalSeconds = 2
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-PortListening -Port $Port) {
+      return $true
+    }
+
+    Start-Sleep -Seconds $IntervalSeconds
+  }
+
+  return $false
+}
+
 if (-not (Test-Command -Name 'docker')) {
   throw 'docker command not found. Please start Docker Desktop first.'
 }
@@ -32,6 +52,16 @@ try {
   Pop-Location
 }
 
+Write-Host 'Waiting for PostgreSQL (5432)...' -ForegroundColor Cyan
+if (-not (Wait-ForPort -Port 5432 -TimeoutSeconds 90)) {
+  throw 'PostgreSQL did not become ready on port 5432. Please confirm Docker Desktop is fully started.'
+}
+
+Write-Host 'Waiting for Redis (6379)...' -ForegroundColor Cyan
+if (-not (Wait-ForPort -Port 6379 -TimeoutSeconds 90)) {
+  throw 'Redis did not become ready on port 6379. Please confirm Docker Desktop is fully started.'
+}
+
 $backendDir = Join-Path $projectRoot 'backend'
 $frontendDir = Join-Path $projectRoot 'frontend'
 
@@ -40,6 +70,10 @@ if (Test-PortListening -Port 3001) {
 } else {
   Write-Host 'Starting backend dev server...' -ForegroundColor Cyan
   Start-Process powershell.exe -ArgumentList '-NoExit', '-Command', "Set-Location '$backendDir'; npm run start:dev" | Out-Null
+
+  if (-not (Wait-ForPort -Port 3001 -TimeoutSeconds 30 -IntervalSeconds 1)) {
+    throw 'Backend did not start on port 3001. Please check the backend terminal window for the exact error.'
+  }
 }
 
 if (Test-PortListening -Port 3000) {

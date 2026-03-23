@@ -10,6 +10,9 @@ import { authApi } from "@/lib/api/auth";
 const inputClassNames = {
   inputWrapper:
     "border border-white/20 bg-white/70 backdrop-blur-sm shadow-[0_8px_30px_rgba(15,23,42,0.08)] data-[hover=true]:border-foreground/20 group-data-[focus=true]:border-primary",
+  input: "text-slate-900 placeholder:text-slate-400 caret-slate-900",
+  label: "text-slate-700",
+  innerWrapper: "text-slate-900",
 };
 const AUTH_PENDING_KEY = "ai-content-auth-pending";
 
@@ -174,9 +177,9 @@ function LoginPageContent() {
                 isRequired
                 classNames={inputClassNames}
                 endContent={
-                  <button type="button" onClick={() => setIsVisible((value) => !value)}>
+                    <button type="button" onClick={() => setIsVisible((value) => !value)}>
                     <Icon
-                      className="pointer-events-none text-2xl text-foreground/45"
+                      className="pointer-events-none text-2xl text-slate-500"
                       icon={isVisible ? "solar:eye-closed-linear" : "solar:eye-bold"}
                     />
                   </button>

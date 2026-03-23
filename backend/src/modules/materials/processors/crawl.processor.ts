@@ -47,6 +47,7 @@ export class CrawlProcessor extends WorkerHost {
         ...item,
         metadata: {
           ...(item.metadata || {}),
+          materialCategory: (item.metadata || {}).materialCategory || 'external_trend',
           retrieval: {
             ...((item.metadata || {}).retrieval || {}),
             sourceId,

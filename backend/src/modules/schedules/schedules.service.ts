@@ -14,6 +14,14 @@ export interface UpdateScheduleDto {
     config?: any;
 }
 
+type CreateContentScheduleConfig = {
+    limit?: number;
+    minScore?: number;
+    contentType?: 'article' | 'xiaohongshu';
+    autoPublish?: boolean;
+    publishAccountId?: string;
+};
+
 @Injectable()
 export class SchedulesService implements OnModuleInit {
     private readonly logger = new Logger(SchedulesService.name);
@@ -158,9 +166,26 @@ export class SchedulesService implements OnModuleInit {
                 case 'create_articles':
                     this.logger.log('Executing automated article generation batch...');
                     // 从最新生成的符合最低分的高分话题中捞取指定篇数
-                    const generationResult = await this.articlesService.batchGenerateDrafts(userConfig.limit || 5, userConfig.minScore || 80);
-                    if (userConfig.autoPublish) {
-                        if (!userConfig.publishAccountId) {
+                    const createConfig = userConfig as CreateContentScheduleConfig;
+                    const targetContentType = createConfig.contentType === 'xiaohongshu' ? 'xiaohongshu' : 'article';
+                    const generationResult = await this.articlesService.batchGenerateDrafts(
+                        createConfig.limit || 5,
+                        createConfig.minScore || 80,
+                        targetContentType,
+                    );
+                    if (createConfig.autoPublish) {
+                        if (targetContentType !== 'article') {
+                            this.logger.warn('自动生成任务当前仅支持公众号文章自动发布，小红书内容将保留为草稿。');
+                            await this.prisma.systemLog.create({
+                                data: {
+                                    level: 'warning',
+                                    content: '自动生成任务当前仅支持公众号文章自动发布，小红书内容将保留为草稿。',
+                                },
+                            });
+                            break;
+                        }
+
+                        if (!createConfig.publishAccountId) {
                             this.logger.warn('自动生成文章任务已开启自动发布，但未选择发布账号，已跳过自动发布。');
                             await this.prisma.systemLog.create({
                                 data: {
@@ -173,7 +198,7 @@ export class SchedulesService implements OnModuleInit {
 
                         for (const articleId of generationResult.generatedArticleIds || []) {
                             try {
-                                await this.publishingService.publishArticle(articleId, userConfig.publishAccountId);
+                                await this.publishingService.publishArticle(articleId, createConfig.publishAccountId);
                             } catch (publishError) {
                                 const message = publishError instanceof Error ? publishError.message : '未知发布错误';
                                 this.logger.error(`自动发布文章失败 [articleId: ${articleId}]: ${message}`);
