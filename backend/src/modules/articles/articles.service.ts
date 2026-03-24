@@ -6,6 +6,7 @@ import { SystemLogsService } from '../system-logs/system-logs.service';
 import { ImageSelectorService } from './image-selector.service';
 import { MaterialsService } from '../materials/materials.service';
 import { QiniuService } from '../storage/qiniu.service';
+import { WechatCompiler } from '../publishing/wechat-publisher/wechat-compiler';
 import {
     renderXiaohongshuCardSvg,
     XiaohongshuSlideRole,
@@ -232,30 +233,18 @@ export class ArticlesService {
                         return newArticle;
                     }
 
-                    const articleData = await this.generateArticlePayload({
+                    const articleData = await this.generateWechatArticlePayload({
                         modelId: config.articleCreation,
-                        systemPrompt: this.buildSystemPrompt(contentType, stylePrompt, contentFormat, templateHtml, templateNotes, articleSystemPrompt),
-                        userPrompt: this.buildUserPrompt({
-                            contentType,
-                            topicTitle: topic.title,
-                            topicSummary: topic.summary || '',
-                            keywords: topic.keywords,
-                            materialContents,
-                            templateNotes,
-                        }),
-                        fallbackTitle: topic.title,
-                        contentFormat,
-                        templateHtml,
-                    });
-
-                    const renderedResult = await this.renderImages({
-                        content: articleData.content,
-                        contentFormat,
+                        topicTitle: topic.title,
+                        topicSummary: topic.summary || '',
+                        keywords: topic.keywords,
+                        materialContents,
+                        stylePrompt,
+                        articleSystemPrompt,
                         materialInfos,
                         imageStylePrompt,
                         imageStyleParams,
                         imageCreationEnabled: Boolean(config.imageCreation),
-                        topicTitle: topic.title,
                     });
                     const coverImage = await this.generateCoverImage({
                         topicTitle: topic.title,
@@ -269,11 +258,11 @@ export class ArticlesService {
                     const newArticle = await this.prisma.article.create({
                         data: {
                             title: articleData.title,
-                            content: renderedResult.content,
+                            content: articleData.content,
                             contentType,
                             contentFormat,
-                            rawHtml: contentFormat === 'html' ? articleData.content : null,
-                            finalHtml: contentFormat === 'html' ? renderedResult.content : null,
+                            rawHtml: articleData.content,
+                            finalHtml: articleData.content,
                             coverImage,
                             status: 'draft',
                             topicId: topic.id,
@@ -1327,6 +1316,102 @@ ${params.materialContents}`;
     </ul>
   </section>
 </article>`;
+    }
+
+    private async generateWechatArticlePayload(params: {
+        modelId: string;
+        topicTitle: string;
+        topicSummary: string;
+        keywords: string[];
+        materialContents: string;
+        stylePrompt: string;
+        articleSystemPrompt: string;
+        materialInfos: MaterialInfo[];
+        imageStylePrompt?: string;
+        imageStyleParams?: { ratio?: string; resolution?: string };
+        imageCreationEnabled: boolean;
+    }): Promise<GeneratedArticlePayload> {
+        const markdownPayload = await this.generateArticlePayload({
+            modelId: params.modelId,
+            systemPrompt: this.buildWechatContinuousSystemPrompt(params.stylePrompt, params.articleSystemPrompt),
+            userPrompt: this.buildWechatContinuousUserPrompt({
+                topicTitle: params.topicTitle,
+                topicSummary: params.topicSummary,
+                keywords: params.keywords,
+                materialContents: params.materialContents,
+            }),
+            fallbackTitle: params.topicTitle,
+            contentFormat: 'markdown',
+            templateHtml: '',
+        });
+
+        const renderedMarkdown = await this.renderImages({
+            content: markdownPayload.content,
+            contentFormat: 'markdown',
+            materialInfos: params.materialInfos,
+            imageStylePrompt: params.imageStylePrompt,
+            imageStyleParams: params.imageStyleParams,
+            imageCreationEnabled: params.imageCreationEnabled,
+            topicTitle: params.topicTitle,
+        });
+
+        const compiledHtml = await WechatCompiler.compile(renderedMarkdown.content);
+
+        return {
+            title: markdownPayload.title,
+            content: compiledHtml,
+            contentFormat: 'html',
+        };
+    }
+
+    private buildWechatContinuousSystemPrompt(stylePrompt: string, articleSystemPrompt: string): string {
+        const basePrompt = articleSystemPrompt.trim() || this.getDefaultStylePrompt('article');
+        return `${basePrompt}
+
+【本次生成规则】
+1. 这一步只负责把正文一口气写顺，先写成完整 markdown 成稿，不要输出 HTML，不要自己套模板，不要思考排版。
+2. 整篇文章必须像一篇自然连贯的公众号成稿，而不是按提纲填空、不是卡片拼接、不是一段一个观点标签。
+3. 允许有小标题，但小标题是帮助推进，不是把文章切碎；每一段都要和上一段有承接。
+4. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
+5. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔。优先画面感、判断力和作者存在感。
+6. 正文里最多保留 0-2 个图片占位符；没有必要就不要硬插图。
+7. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
+
+【补充风格】
+${stylePrompt}`;
+    }
+
+    private buildWechatContinuousUserPrompt(params: {
+        topicTitle: string;
+        topicSummary: string;
+        keywords: string[];
+        materialContents: string;
+    }): string {
+        return `请围绕下面这个题，直接写出一篇适合公众号发布的完整成稿。
+
+【选题】
+${params.topicTitle}
+
+【摘要】
+${params.topicSummary || '无'}
+
+【关键词】
+${params.keywords.join('、') || '无'}
+
+【写作要求】
+1. 整篇文章要一气呵成，重点是“连贯”“顺着读下去”“像一个成熟作者真的写完了一篇文章”。
+2. 不要写成提纲，不要写成新闻综述，不要一段一个孤立结论，不要到处塞金句和空洞小标题。
+3. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
+4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤。
+5. 可以有 3-4 个真正有信息量的小标题，但每个小标题下面都要推动文章往前走。
+6. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+
+【素材】
+${params.materialContents}
+
+【输出格式】
+只返回 JSON：
+{"title":"文章标题","content":"markdown 正文"}`;
     }
 
     private async generateArticlePayload(params: {
