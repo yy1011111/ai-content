@@ -7,10 +7,12 @@ export interface Style {
     promptTemplate: string;
     parameters?: Record<string, unknown>;
     isDefault: boolean;
-    type: 'article' | 'image' | 'template' | 'xiaohongshu';
+    type: StyleType;
     createdAt: string;
     updatedAt: string;
 }
+
+export type StyleType = 'article' | 'image' | 'template' | 'xiaohongshu' | 'article_system';
 
 export const stylesApi = {
     // 获取所有风格，支持按类型过滤

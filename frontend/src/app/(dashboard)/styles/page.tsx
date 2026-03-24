@@ -1,9 +1,31 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Card, Button, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Spinner, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Textarea, useDisclosure, addToast, Tabs, Tab } from "@heroui/react";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+    addToast,
+    Button,
+    Card,
+    Chip,
+    Input,
+    Modal,
+    ModalBody,
+    ModalContent,
+    ModalFooter,
+    ModalHeader,
+    Spinner,
+    Tab,
+    Table,
+    TableBody,
+    TableCell,
+    TableColumn,
+    TableHeader,
+    TableRow,
+    Tabs,
+    Textarea,
+    useDisclosure,
+} from "@heroui/react";
 import { Icon, loadIcons } from "@iconify/react";
-import { stylesApi, Style } from "@/lib/api/styles";
+import { stylesApi, Style, StyleType } from "@/lib/api/styles";
 
 type StyleFormData = {
     name: string;
@@ -13,44 +35,116 @@ type StyleFormData = {
     parameters?: Record<string, unknown>;
 };
 
+type StyleManagerProps = {
+    type: StyleType;
+    title: string;
+    description: string;
+    promptPlaceholder: string;
+};
+
 export default function StylesPage() {
     useEffect(() => {
         loadIcons([
-            'solar:document-add-bold', 'solar:document-add-linear', 'solar:pen-linear',
-            'solar:trash-bin-trash-linear', 'solar:add-circle-bold', 'solar:star-bold', 'solar:star-outline',
-            'solar:gallery-bold', 'solar:chat-round-dots-bold'
+            "solar:document-add-bold",
+            "solar:pen-linear",
+            "solar:trash-bin-trash-linear",
+            "solar:add-circle-bold",
+            "solar:star-bold",
+            "solar:gallery-bold",
+            "solar:chat-round-dots-bold",
+            "solar:text-bold",
         ]);
     }, []);
 
     return (
-        <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full">
-            <header className="rounded-medium border-small border-divider flex items-center justify-between gap-3 p-4 bg-background shadow-sm">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+            <header className="flex items-center justify-between gap-3 rounded-medium border-small border-divider bg-background p-4 shadow-sm">
                 <div>
-                    <h2 className="text-large text-default-900 font-bold flex items-center gap-2">
+                    <h2 className="flex items-center gap-2 text-large font-bold text-default-900">
                         <Icon icon="solar:document-add-bold" className="text-primary" />
                         风格管理
                     </h2>
-                    <p className="text-small text-default-500 mt-1">管理文章、小红书笔记与配图时的风格预设，每种类型支持设置全局唯一默认风格</p>
+                    <p className="mt-1 text-small text-default-500">
+                        在这里统一管理公众号正文主提示词、文章风格、小红书风格和图片风格。每种类型都只会生效一条默认配置。
+                    </p>
                 </div>
             </header>
 
-            <Card className="bg-background/60 dark:bg-default-100/50 backdrop-blur-md border-small border-white/10 shadow-medium">
+            <Card className="border-small border-white/10 bg-background/60 shadow-medium backdrop-blur-md dark:bg-default-100/50">
                 <Tabs
                     classNames={{
-                        tabList: "mx-4 mt-6 text-medium bg-default-100/50",
+                        tabList: "mx-4 mt-6 bg-default-100/50 text-medium",
                         tabContent: "text-small",
                         panel: "p-6",
                     }}
                     size="lg"
                 >
-                    <Tab key="article" title={<div className="flex items-center gap-2"><Icon icon="solar:document-add-bold" width={20} /><span>文章风格</span></div>}>
-                        <StyleManager type="article" title="文章风格管理" description="用于生成文章内容、改写、扩写等文本创作任务的预设风格" promptPlaceholder="输入扮演角色的指令或文章结构要求，作为 system prompt 输入给大模型..." />
+                    <Tab
+                        key="article_system"
+                        title={
+                            <div className="flex items-center gap-2">
+                                <Icon icon="solar:text-bold" width={20} />
+                                <span>公众号主提示词</span>
+                            </div>
+                        }
+                    >
+                        <StyleManager
+                            type="article_system"
+                            title="公众号正文主提示词"
+                            description="控制公众号正文主生成链的核心系统提示词。这里改的是主脑，不只是语气调味。"
+                            promptPlaceholder="输入公众号正文主提示词。建议只写核心写作方法、读者定位、结构规则、语言禁忌和输出要求，不要把图片 URL 或具体素材写死。"
+                        />
                     </Tab>
-                    <Tab key="xiaohongshu" title={<div className="flex items-center gap-2"><Icon icon="solar:chat-round-dots-bold" width={20} /><span>小红书笔记风格</span></div>}>
-                        <StyleManager type="xiaohongshu" title="小红书笔记风格管理" description="用于生成小红书笔记、种草文案、经验总结等平台化内容的预设风格" promptPlaceholder="输入适用于小红书笔记的语气、结构、互动方式与表达偏好，例如：真实口语感、先结论后展开、结尾带标签..." />
+
+                    <Tab
+                        key="article"
+                        title={
+                            <div className="flex items-center gap-2">
+                                <Icon icon="solar:document-add-bold" width={20} />
+                                <span>文章风格</span>
+                            </div>
+                        }
+                    >
+                        <StyleManager
+                            type="article"
+                            title="文章风格管理"
+                            description="用于控制公众号文章的口吻、作者感、情绪强度和表达质感。"
+                            promptPlaceholder="输入文章风格要求，例如：更像真人评论、更克制、更锋利、更适合公众号深度阅读。"
+                        />
                     </Tab>
-                    <Tab key="image" title={<div className="flex items-center gap-2"><Icon icon="solar:gallery-bold" width={20} /><span>图片风格</span></div>}>
-                        <StyleManager type="image" title="图片风格管理" description="用于生成文章配图、封面图等视觉内容的预设提示词风格" promptPlaceholder="输入画面主体、环境、光影、材质、画风等绘画提示词要求..." />
+
+                    <Tab
+                        key="xiaohongshu"
+                        title={
+                            <div className="flex items-center gap-2">
+                                <Icon icon="solar:chat-round-dots-bold" width={20} />
+                                <span>小红书笔记风格</span>
+                            </div>
+                        }
+                    >
+                        <StyleManager
+                            type="xiaohongshu"
+                            title="小红书笔记风格管理"
+                            description="用于控制小红书笔记的语气、节奏、互动感和平台表达方式。"
+                            promptPlaceholder="输入适合小红书的风格要求，例如：开头更抓人、短句、更口语化、更适合收藏和评论。"
+                        />
+                    </Tab>
+
+                    <Tab
+                        key="image"
+                        title={
+                            <div className="flex items-center gap-2">
+                                <Icon icon="solar:gallery-bold" width={20} />
+                                <span>图片风格</span>
+                            </div>
+                        }
+                    >
+                        <StyleManager
+                            type="image"
+                            title="图片风格管理"
+                            description="用于控制封面图、正文配图和视觉生成时的总体画面风格。"
+                            promptPlaceholder="输入图片风格要求，例如：更克制、更真实、更像公众号头图，禁止文字水印和平台感。"
+                        />
                     </Tab>
                 </Tabs>
             </Card>
@@ -58,7 +152,7 @@ export default function StylesPage() {
     );
 }
 
-function StyleManager({ type, title, description, promptPlaceholder }: { type: 'article' | 'image' | 'xiaohongshu', title: string, description: string, promptPlaceholder: string }) {
+function StyleManager({ type, title, description, promptPlaceholder }: StyleManagerProps) {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [styles, setStyles] = useState<Style[]>([]);
     const [editingStyle, setEditingStyle] = useState<Style | null>(null);
@@ -70,13 +164,19 @@ function StyleManager({ type, title, description, promptPlaceholder }: { type: '
             const data = await stylesApi.list(type);
             setStyles(data);
         } catch (error: unknown) {
-            addToast({ title: "加载失败", description: error instanceof Error ? error.message : "未知错误", color: "danger" });
+            addToast({
+                title: "加载失败",
+                description: error instanceof Error ? error.message : "未知错误",
+                color: "danger",
+            });
         } finally {
             setLoading(false);
         }
     }, [type]);
 
-    useEffect(() => { fetchStyles(); }, [fetchStyles]);
+    useEffect(() => {
+        fetchStyles();
+    }, [fetchStyles]);
 
     const handleAdd = () => {
         setEditingStyle(null);
@@ -91,20 +191,28 @@ function StyleManager({ type, title, description, promptPlaceholder }: { type: '
     const handleDelete = async (id: string) => {
         try {
             await stylesApi.remove(id);
-            setStyles(styles.filter(s => s.id !== id));
+            setStyles((current) => current.filter((item) => item.id !== id));
             addToast({ title: "删除成功", color: "success" });
         } catch (error: unknown) {
-            addToast({ title: "删除失败", description: error instanceof Error ? error.message : "未知错误", color: "danger" });
+            addToast({
+                title: "删除失败",
+                description: error instanceof Error ? error.message : "未知错误",
+                color: "danger",
+            });
         }
     };
 
     const handleSetDefault = async (id: string) => {
         try {
             await stylesApi.setDefault(id);
-            fetchStyles(); // 重新拉取以更新列表中的 default 状态
-            addToast({ title: "已设为默认风格", color: "success" });
+            await fetchStyles();
+            addToast({ title: "已设为默认", color: "success" });
         } catch (error: unknown) {
-            addToast({ title: "设置失败", description: error instanceof Error ? error.message : "未知错误", color: "danger" });
+            addToast({
+                title: "设置失败",
+                description: error instanceof Error ? error.message : "未知错误",
+                color: "danger",
+            });
         }
     };
 
@@ -116,36 +224,46 @@ function StyleManager({ type, title, description, promptPlaceholder }: { type: '
                 await stylesApi.create({ ...formData, type });
             }
             onClose();
-            fetchStyles();
+            await fetchStyles();
             addToast({ title: "保存成功", color: "success" });
         } catch (error: unknown) {
-            addToast({ title: "保存失败", description: error instanceof Error ? error.message : "未知错误", color: "danger" });
+            addToast({
+                title: "保存失败",
+                description: error instanceof Error ? error.message : "未知错误",
+                color: "danger",
+            });
         }
     };
 
-    if (loading) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
+    if (loading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Spinner size="lg" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center mb-2">
+            <div className="mb-2 flex items-center justify-between">
                 <div>
                     <h3 className="text-medium font-bold">{title}</h3>
-                    <p className="text-small text-default-500 mt-1">{description}</p>
+                    <p className="mt-1 text-small text-default-500">{description}</p>
                 </div>
                 <Button color="primary" startContent={<Icon icon="solar:add-circle-bold" />} onClick={handleAdd}>
-                    添加风格
+                    添加配置
                 </Button>
             </div>
 
-            <Table aria-label={`${title}列表`} className="border-small border-divider rounded-medium shadow-sm bg-background">
+            <Table aria-label={`${title}列表`} className="rounded-medium border-small border-divider bg-background shadow-sm">
                 <TableHeader>
-                    <TableColumn>风格名称</TableColumn>
+                    <TableColumn>名称</TableColumn>
                     <TableColumn>状态</TableColumn>
-                    <TableColumn>描述</TableColumn>
+                    <TableColumn>说明</TableColumn>
                     <TableColumn>更新时间</TableColumn>
                     <TableColumn align="center">操作</TableColumn>
                 </TableHeader>
-                <TableBody emptyContent="暂无创作风格">
+                <TableBody emptyContent="暂无配置">
                     {styles.map((style) => (
                         <TableRow key={style.id}>
                             <TableCell>
@@ -153,28 +271,54 @@ function StyleManager({ type, title, description, promptPlaceholder }: { type: '
                             </TableCell>
                             <TableCell>
                                 {style.isDefault ? (
-                                    <Chip size="sm" color="success" variant="flat" startContent={<Icon icon="solar:star-bold" />}>默认</Chip>
+                                    <Chip
+                                        color="success"
+                                        size="sm"
+                                        startContent={<Icon icon="solar:star-bold" />}
+                                        variant="flat"
+                                    >
+                                        默认
+                                    </Chip>
                                 ) : (
-                                    <Chip size="sm" color="default" variant="flat">普通</Chip>
+                                    <Chip color="default" size="sm" variant="flat">
+                                        普通
+                                    </Chip>
                                 )}
                             </TableCell>
                             <TableCell>
-                                <span className="text-small text-default-500 truncate max-w-xs block">{style.description || '-'}</span>
+                                <span className="block max-w-xs truncate text-small text-default-500">
+                                    {style.description || "-"}
+                                </span>
                             </TableCell>
                             <TableCell>
-                                <span className="text-small text-default-500">{new Date(style.updatedAt).toLocaleString('zh-CN')}</span>
+                                <span className="text-small text-default-500">
+                                    {new Date(style.updatedAt).toLocaleString("zh-CN")}
+                                </span>
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center justify-center gap-2">
                                     {!style.isDefault && (
-                                        <Button size="sm" variant="light" color="success" onClick={() => handleSetDefault(style.id)} title="设为默认">
+                                        <Button
+                                            color="success"
+                                            size="sm"
+                                            variant="light"
+                                            onClick={() => handleSetDefault(style.id)}
+                                        >
                                             设为默认
                                         </Button>
                                     )}
-                                    <Button isIconOnly size="sm" variant="light" onClick={() => handleEdit(style)} title="编辑">
+                                    <Button isIconOnly size="sm" variant="light" title="编辑" onClick={() => handleEdit(style)}>
                                         <Icon icon="solar:pen-linear" width={18} />
                                     </Button>
-                                    <Button isIconOnly size="sm" variant="light" color="danger" onClick={() => handleDelete(style.id)} title="删除" isDisabled={style.isDefault}>
+                                    <Button
+                                        isIconOnly
+                                        color="danger"
+                                        isDisabled={style.isDefault}
+                                        size="sm"
+                                        title="删除"
+                                        variant="light"
+                                        onClick={() => handleDelete(style.id)}
+                                    >
                                         <Icon icon="solar:trash-bin-trash-linear" width={18} />
                                     </Button>
                                 </div>
@@ -184,37 +328,76 @@ function StyleManager({ type, title, description, promptPlaceholder }: { type: '
                 </TableBody>
             </Table>
 
-            <StyleModal isOpen={isOpen} onClose={onClose} style={editingStyle} onSave={handleSave} promptPlaceholder={promptPlaceholder} type={type} />
+            <StyleModal
+                isOpen={isOpen}
+                onClose={onClose}
+                onSave={handleSave}
+                promptPlaceholder={promptPlaceholder}
+                style={editingStyle}
+                type={type}
+            />
         </div>
     );
 }
 
-function StyleModal({ isOpen, onClose, style, onSave, promptPlaceholder, type }: {
-    isOpen: boolean; onClose: () => void; style: Style | null;
+function StyleModal({
+    isOpen,
+    onClose,
+    style,
+    onSave,
+    promptPlaceholder,
+    type,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    style: Style | null;
     onSave: (data: StyleFormData) => Promise<void>;
     promptPlaceholder: string;
-    type: 'article' | 'image' | 'xiaohongshu';
+    type: StyleType;
 }) {
-    const [formData, setFormData] = useState<{ name: string, description: string, promptTemplate: string, parameters: Record<string, unknown> }>({ name: "", description: "", promptTemplate: "", parameters: {} });
+    const [formData, setFormData] = useState<{
+        name: string;
+        description: string;
+        promptTemplate: string;
+        parameters: Record<string, unknown>;
+    }>({
+        name: "",
+        description: "",
+        promptTemplate: "",
+        parameters: {},
+    });
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (style) {
-            setFormData({ name: style.name, description: style.description || "", promptTemplate: style.promptTemplate, parameters: style.parameters || {} });
-        } else {
-            setFormData({ name: "", description: "", promptTemplate: "", parameters: {} });
+            setFormData({
+                name: style.name,
+                description: style.description || "",
+                promptTemplate: style.promptTemplate,
+                parameters: style.parameters || {},
+            });
+            return;
         }
+
+        setFormData({
+            name: "",
+            description: "",
+            promptTemplate: "",
+            parameters: {},
+        });
     }, [style]);
 
     const handleSubmit = async () => {
         if (!formData.name.trim() || !formData.promptTemplate.trim()) {
             return;
         }
+
         setSaving(true);
         try {
-            await onSave({ ...formData, isDefault: style ? undefined : false }); // 新建默认不为 default, 需单独设置
-        } catch (error: unknown) {
-            console.error(error);
+            await onSave({
+                ...formData,
+                isDefault: style ? undefined : false,
+            });
         } finally {
             setSaving(false);
         }
@@ -223,47 +406,60 @@ function StyleModal({ isOpen, onClose, style, onSave, promptPlaceholder, type }:
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="3xl">
             <ModalContent>
-                <ModalHeader>{style ? "编辑创作风格" : "添加创作风格"}</ModalHeader>
+                <ModalHeader>{style ? "编辑配置" : "添加配置"}</ModalHeader>
                 <ModalBody>
                     <div className="flex flex-col gap-4">
                         <Input
-                            label="风格名称"
-                            placeholder="例如：小红书爆款风、深度科技分析等"
-                            value={formData.name}
                             isRequired
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            label="名称"
                             labelPlacement="outside"
+                            placeholder={
+                                type === "article_system"
+                                    ? "例如：公众号正文主提示词·V3"
+                                    : "例如：公众号深度评论风格"
+                            }
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         />
                         <Input
-                            label="描述简介"
-                            placeholder="简要描述该风格的特点"
+                            label="说明"
+                            labelPlacement="outside"
+                            placeholder="简单说明这条配置控制的内容"
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            labelPlacement="outside"
                         />
                         <Textarea
+                            isRequired
                             label="Prompt 模板"
+                            labelPlacement="outside"
+                            minRows={10}
                             placeholder={promptPlaceholder}
                             value={formData.promptTemplate}
-                            isRequired
-                            minRows={8}
                             onChange={(e) => setFormData({ ...formData, promptTemplate: e.target.value })}
-                            labelPlacement="outside"
                         />
-                        {type === 'image' && (
+                        {type === "image" && (
                             <Input
-                                label="图片比例 (可选)"
-                                placeholder="例如：16:9，留空即为默认"
-                                value={typeof formData.parameters?.ratio === "string" ? formData.parameters.ratio : ""}
-                                onChange={(e) => setFormData({ ...formData, parameters: { ...formData.parameters, ratio: e.target.value } })}
+                                label="图片比例（可选）"
                                 labelPlacement="outside"
+                                placeholder="例如：16:9"
+                                value={typeof formData.parameters?.ratio === "string" ? formData.parameters.ratio : ""}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        parameters: { ...formData.parameters, ratio: e.target.value },
+                                    })
+                                }
                             />
                         )}
                     </div>
                 </ModalBody>
                 <ModalFooter>
-                    <Button variant="flat" onClick={onClose}>取消</Button>
-                    <Button color="primary" onClick={handleSubmit} isLoading={saving}>保存</Button>
+                    <Button variant="flat" onClick={onClose}>
+                        取消
+                    </Button>
+                    <Button color="primary" isLoading={saving} onClick={handleSubmit}>
+                        保存
+                    </Button>
                 </ModalFooter>
             </ModalContent>
         </Modal>

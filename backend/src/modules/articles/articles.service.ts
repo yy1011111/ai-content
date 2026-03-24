@@ -138,15 +138,21 @@ export class ArticlesService {
         try {
             return await withTimeout(
                 (async () => {
-                    const [articleStyle, imageStyle, articleTemplate] = await Promise.all([
+                    const [articleStyle, imageStyle, articleTemplate, articleSystemStyle] = await Promise.all([
                         this.prisma.style.findFirst({ where: { isDefault: true, type: contentType === 'xiaohongshu' ? 'xiaohongshu' : 'article' } }),
                         this.prisma.style.findFirst({ where: { isDefault: true, type: 'image' } }),
                         contentType === 'article'
                             ? this.prisma.style.findFirst({ where: { isDefault: true, type: 'template' } })
                             : Promise.resolve(null),
+                        contentType === 'article'
+                            ? this.prisma.style.findFirst({ where: { isDefault: true, type: 'article_system' } })
+                            : Promise.resolve(null),
                     ]);
 
                     const stylePrompt = articleStyle?.promptTemplate || this.getDefaultStylePrompt(contentType);
+                    const articleSystemPrompt = contentType === 'article'
+                        ? articleSystemStyle?.promptTemplate?.trim() || ''
+                        : '';
                     const templateHtml =
                         contentType === 'article'
                             ? (articleTemplate?.promptTemplate?.trim() || this.getDefaultArticleTemplate())
@@ -228,7 +234,7 @@ export class ArticlesService {
 
                     const articleData = await this.generateArticlePayload({
                         modelId: config.articleCreation,
-                        systemPrompt: this.buildSystemPrompt(contentType, stylePrompt, contentFormat, templateHtml, templateNotes),
+                        systemPrompt: this.buildSystemPrompt(contentType, stylePrompt, contentFormat, templateHtml, templateNotes, articleSystemPrompt),
                         userPrompt: this.buildUserPrompt({
                             contentType,
                             topicTitle: topic.title,
@@ -444,8 +450,9 @@ export class ArticlesService {
         contentFormat: ArticleContentFormat,
         templateHtml: string,
         templateNotes: string,
+        articleSystemPrompt: string = '',
     ): string {
-        const corePrompt = `你是一名专门写微信公众号爆款正文的中文作者。主要写社会热点、职场、情感婚恋家庭类内容，核心读者是35岁以上中产。
+        const corePrompt = articleSystemPrompt.trim() || `你是一名专门写微信公众号爆款正文的中文作者。主要写社会热点、职场、情感婚恋家庭类内容，核心读者是35岁以上中产。
 
 调性不固定，根据题材走：
 - 社会热点：可以犀利，但不是愤青式骂街，是见过世面的人说话，准、稳、有一点凉意；
@@ -662,6 +669,7 @@ ${params.materialContents}`;
         contentFormat: ArticleContentFormat,
         templateHtml: string,
         templateNotes: string,
+        articleSystemPrompt: string = '',
     ): string {
         if (contentType === 'article') {
             return this.getWeChatArticleV3SystemPrompt(
@@ -669,6 +677,7 @@ ${params.materialContents}`;
                 contentFormat,
                 templateHtml,
                 templateNotes,
+                articleSystemPrompt,
             );
         }
 
