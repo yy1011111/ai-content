@@ -37,12 +37,14 @@ const styles = [
     isDefault: true,
     description: '适合小红书图文笔记的默认写法，强调开头抓人、结论前置和强共鸣表达。',
     promptTemplate: `你是一名懂小红书平台语感的内容策划。
+
 请始终记住这些要求：
 1. 结论前置，少讲废话，开头要能抓人。
 2. 像真人分享，而不是像老师讲课。
 3. 语言口语化、可转述、有共鸣，不装、不虚、不端着。
 4. 每一页或每一段只讲一个重点，不要信息过载。
-5. 能让人想收藏、评论、继续往下看。
+5. 要让人想收藏、评论、继续往下看。
+
 目标是写出适合小红书传播的图文笔记内容。`,
   },
   {
@@ -51,12 +53,14 @@ const styles = [
     isDefault: true,
     description: '适合公众号头图和小红书封面的图片默认风格，强调干净、克制、适合叠字。',
     promptTemplate: `请生成适合中文内容平台传播的封面或配图。
+
 视觉要求：
 1. 画面干净、明亮、克制，不要廉价感，不要杂乱背景。
 2. 主视觉明确，保留适合叠加中文标题的留白区域。
 3. 气质要接近成熟公众号头图或小红书封面，不要赛博霓虹，不要过度特效。
 4. 如果是正文配图，必须和主题强相关；如果不够相关，宁可不要。
-5. 尽量避免抽象到看不懂的概念图。`,
+5. 尽量避免抽象到看不懂的概念图。
+6. 严禁任何文字、数字、字母、logo、品牌名、水印、角标、二维码、按钮、界面元素、截图元素。`,
     parameters: {
       ratio: '3:4',
     },
@@ -72,24 +76,29 @@ const styles = [
   </section>
 
   <section class="wechat-section">
-    <h2>先把事情说透</h2>
-    <p>这里写第一部分正文。用两到三段把事件、现象或问题讲清楚，每段尽量短一点。</p>
+    <h2>先把最扎心的那个点说透</h2>
+    <p>这里写第一部分正文。用两到三段把事情、现象或问题讲清楚，每段尽量短一点。</p>
     <p>这里继续补充关键事实、用户感受或作者观察，避免套话。</p>
   </section>
 
   <section class="wechat-section">
-    <h2>真正值得聊的是</h2>
+    <h2>真正值得展开的，不只是表面那件事</h2>
     <p>这里写第二部分正文。给出判断、拆解原因，或者指出最容易被忽略的地方。</p>
-    <blockquote>这里放一句最值得被记住的话，适合作为金句或观点提炼。</blockquote>
+    <blockquote>这里放一句最值得被记住的话，适合作为金句或观点提点。</blockquote>
   </section>
 
   <figure class="wechat-figure">
-    <img src="[real-image-与正文强相关的真实配图描述]" alt="配图说明" />
+    <img src="[real-image-与正文强相关的真实配图描述]" alt="正文配图" />
     <figcaption>如果图片不够贴切，可以整段删除，不要为了凑图保留无关图片。</figcaption>
   </figure>
 
   <section class="wechat-section">
-    <h2>给读者一个带走的结论</h2>
+    <h2>如果这件事落到普通人身上，会发生什么</h2>
+    <p>这里写第三部分正文，把问题往现实生活、普通人处境或读者关切上落。</p>
+  </section>
+
+  <section class="wechat-section">
+    <h2>最后给读者一个带得走的结论</h2>
     <p>这里写最后一部分正文。总结最核心的结论、提醒或态度，不要草草收尾。</p>
     <ul>
       <li>可以保留 2 到 3 条真正有用的要点</li>
@@ -146,10 +155,7 @@ async function main() {
       type: true,
       isDefault: true,
     },
-    orderBy: [
-      { type: 'asc' },
-      { createdAt: 'asc' },
-    ],
+    orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
   });
 
   console.log(JSON.stringify(summary, null, 2));

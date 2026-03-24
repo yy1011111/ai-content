@@ -81,7 +81,7 @@ export class XiaohongshuKeywordCrawlerService {
   ): Promise<CrawlResult[]> {
     const normalizedKeyword = keyword.trim();
     const cappedLimit = Math.max(1, Math.min(limit, 20));
-    const candidatePoolSize = this.getCandidatePoolSize(cappedLimit, sort);
+    const candidatePoolSize = this.getCandidatePoolSize(cappedLimit, sort, timeRange);
 
     if (!normalizedKeyword) {
       throw new Error('关键词不能为空');
@@ -107,9 +107,10 @@ export class XiaohongshuKeywordCrawlerService {
 
       const searchItems = await searchItemsPromise.catch(() => []);
       const filteredItems = this.filterSearchItemsByTimeRange(searchItems, timeRange);
+      const rankedItems = this.rankSearchItems(filteredItems, normalizedKeyword, sort);
       const cards =
         searchItems.length > 0
-          ? this.mapSearchItemsToCards(this.sortSearchItems(filteredItems, sort), cappedLimit)
+          ? this.mapSearchItemsToCards(rankedItems, cappedLimit)
           : await this.extractCards(page, cappedLimit);
 
       if (cards.length === 0) {
@@ -316,10 +317,11 @@ export class XiaohongshuKeywordCrawlerService {
   private collectSearchNotes(page: Page, limit: number): Promise<XiaohongshuSearchNoteItem[]> {
     return new Promise((resolve) => {
       const collected = new Map<string, XiaohongshuSearchNoteItem>();
+      const timeoutMs = Math.min(30000, Math.max(12000, Math.ceil(limit / 20) * 4000));
       const timer = setTimeout(() => {
         page.off('response', onResponse);
         resolve([...collected.values()]);
-      }, 12000);
+      }, timeoutMs);
 
       const onResponse = async (response: { url(): string; json(): Promise<any> }) => {
         try {
@@ -352,8 +354,114 @@ export class XiaohongshuKeywordCrawlerService {
     });
   }
 
+  private rankSearchItems(
+    items: XiaohongshuSearchNoteItem[],
+    keyword: string,
+    sort: XiaohongshuSortType,
+  ) {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    const exactMatches: XiaohongshuSearchNoteItem[] = [];
+    const partialMatches: XiaohongshuSearchNoteItem[] = [];
+    const weakMatches: XiaohongshuSearchNoteItem[] = [];
+
+    for (const item of items) {
+      const relevance = this.getKeywordRelevanceScore(item, normalizedKeyword);
+
+      if (relevance >= 1000) {
+        exactMatches.push(item);
+      } else if (relevance > 0) {
+        partialMatches.push(item);
+      } else {
+        weakMatches.push(item);
+      }
+    }
+
+    const baseSort = (left: XiaohongshuSearchNoteItem, right: XiaohongshuSearchNoteItem) => {
+      const leftRelevance = this.getKeywordRelevanceScore(left, normalizedKeyword);
+      const rightRelevance = this.getKeywordRelevanceScore(right, normalizedKeyword);
+      if (leftRelevance !== rightRelevance) {
+        return rightRelevance - leftRelevance;
+      }
+
+      const leftInteract = left.note_card?.interact_info || {};
+      const rightInteract = right.note_card?.interact_info || {};
+
+      if (sort === 'popularity_descending') {
+        return this.parseMetricNumber(rightInteract.liked_count) - this.parseMetricNumber(leftInteract.liked_count);
+      }
+      if (sort === 'collect_descending') {
+        return this.parseMetricNumber(rightInteract.collected_count) - this.parseMetricNumber(leftInteract.collected_count);
+      }
+      if (sort === 'comment_descending') {
+        return this.parseMetricNumber(rightInteract.comment_count) - this.parseMetricNumber(leftInteract.comment_count);
+      }
+      if (sort === 'time_descending') {
+        return this.extractDateScore(right) - this.extractDateScore(left);
+      }
+
+      const leftScore = this.getEngagementScore(left);
+      const rightScore = this.getEngagementScore(right);
+      if (leftScore !== rightScore) {
+        return rightScore - leftScore;
+      }
+
+      return this.extractDateScore(right) - this.extractDateScore(left);
+    };
+
+    exactMatches.sort(baseSort);
+    partialMatches.sort(baseSort);
+    weakMatches.sort(baseSort);
+
+    const strongMatches = [...exactMatches, ...partialMatches];
+    const minimumStrongCount = Math.max(4, Math.ceil(items.length * 0.3));
+
+    if (strongMatches.length >= minimumStrongCount) {
+      return strongMatches;
+    }
+
+    return [...exactMatches, ...partialMatches, ...weakMatches];
+  }
+
+  private getKeywordRelevanceScore(item: XiaohongshuSearchNoteItem, normalizedKeyword: string) {
+    if (!normalizedKeyword) {
+      return 0;
+    }
+
+    const title = (item.note_card?.display_title || '').trim().toLowerCase();
+    const author = (item.note_card?.user?.nick_name || item.note_card?.user?.nickname || '').trim().toLowerCase();
+
+    if (title.includes(normalizedKeyword)) {
+      return 1000;
+    }
+
+    const keywordParts = normalizedKeyword
+      .split(/[\s/|,，、]+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 2);
+
+    let score = 0;
+    for (const part of keywordParts) {
+      if (title.includes(part)) {
+        score += 200;
+      } else if (author.includes(part)) {
+        score += 20;
+      }
+    }
+
+    return score;
+  }
+
+  private getEngagementScore(item: XiaohongshuSearchNoteItem) {
+    const interact = item.note_card?.interact_info || {};
+    return (
+      this.parseMetricNumber(interact.liked_count) * 2 +
+      this.parseMetricNumber(interact.collected_count) * 4 +
+      this.parseMetricNumber(interact.comment_count) * 3
+    );
+  }
+
   private async scrollSearchResults(page: Page, targetCount: number) {
-    const scrollRounds = Math.max(2, Math.min(6, Math.ceil(targetCount / 12)));
+    const scrollRounds = Math.max(4, Math.min(20, Math.ceil(targetCount / 12)));
 
     for (let index = 0; index < scrollRounds; index += 1) {
       await page
@@ -400,41 +508,6 @@ export class XiaohongshuKeywordCrawlerService {
       })
       .filter((item): item is XiaohongshuCard => Boolean(item))
       .slice(0, limit);
-  }
-
-  private sortSearchItems(items: XiaohongshuSearchNoteItem[], sort: XiaohongshuSortType) {
-    const sorted = [...items];
-
-    sorted.sort((a, b) => {
-      const aInteract = a.note_card?.interact_info || {};
-      const bInteract = b.note_card?.interact_info || {};
-
-      if (sort === 'popularity_descending') {
-        return this.parseMetricNumber(bInteract.liked_count) - this.parseMetricNumber(aInteract.liked_count);
-      }
-      if (sort === 'collect_descending') {
-        return this.parseMetricNumber(bInteract.collected_count) - this.parseMetricNumber(aInteract.collected_count);
-      }
-      if (sort === 'comment_descending') {
-        return this.parseMetricNumber(bInteract.comment_count) - this.parseMetricNumber(aInteract.comment_count);
-      }
-      if (sort === 'time_descending') {
-        return this.extractDateScore(b) - this.extractDateScore(a);
-      }
-
-      const scoreA =
-        this.parseMetricNumber(aInteract.liked_count) +
-        this.parseMetricNumber(aInteract.collected_count) * 2 +
-        this.parseMetricNumber(aInteract.comment_count) * 1.5;
-      const scoreB =
-        this.parseMetricNumber(bInteract.liked_count) +
-        this.parseMetricNumber(bInteract.collected_count) * 2 +
-        this.parseMetricNumber(bInteract.comment_count) * 1.5;
-
-      return scoreB - scoreA;
-    });
-
-    return sorted;
   }
 
   private parseMetricNumber(value?: string) {
@@ -539,12 +612,22 @@ export class XiaohongshuKeywordCrawlerService {
     });
   }
 
-  private getCandidatePoolSize(limit: number, sort: XiaohongshuSortType) {
-    if (sort === 'general') {
-      return Math.max(20, Math.min(40, limit * 2));
+  private getCandidatePoolSize(
+    limit: number,
+    sort: XiaohongshuSortType,
+    timeRange: XiaohongshuTimeRangeType,
+  ) {
+    const base = sort === 'general' ? Math.max(60, limit * 6) : Math.max(80, limit * 8);
+
+    if (timeRange === 'all') {
+      return Math.min(80, base);
     }
 
-    return Math.max(30, Math.min(80, limit * 4));
+    if (timeRange === '1d') {
+      return Math.min(240, base * 3);
+    }
+
+    return Math.min(240, base * 3);
   }
 
   private buildNoteUrl(noteId: string, xsecToken?: string) {

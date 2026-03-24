@@ -3,10 +3,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AiClientService } from '../ai-models/ai-client.service';
 import { DefaultModelsService } from '../ai-models/default-models.service';
 
-/**
- * 图片选择服务
- * 实现混合配图策略：根据需求选择真实图片或AI生成图片
- */
 @Injectable()
 export class ImageSelectorService {
   private readonly logger = new Logger(ImageSelectorService.name);
@@ -17,14 +13,6 @@ export class ImageSelectorService {
     private readonly defaultModels: DefaultModelsService,
   ) {}
 
-  /**
-   * 选择配图
-   * @param type 图片类型：'real' 真实图片，'ai' AI生成
-   * @param prompt 图片描述/提示词
-   * @param materials 关联的素材列表（用于查找真实图片）
-   * @param imageStyle 图片风格 prompt
-   * @returns 图片URL
-   */
   async selectImage(
     type: 'real' | 'ai',
     prompt: string,
@@ -33,18 +21,16 @@ export class ImageSelectorService {
     imageParams?: { ratio?: string; resolution?: string },
   ): Promise<string | null> {
     if (type === 'real') {
-      // 尝试从素材中找到相关真实图片
       const realImage = await this.findRelevantImage(prompt, materials);
       if (realImage) {
         this.logger.log(`使用真实图片: ${realImage}`);
         return realImage;
       }
-      // 没有找到合适的真实图片，降级到 AI 生成
+
       this.logger.log('未找到合适的真实图片，降级使用 AI 生成');
     }
 
-    // AI 生成图片
-    return await this.generateAiImage(prompt, imageStyle, imageParams);
+    return this.generateAiImage(prompt, imageStyle, imageParams);
   }
 
   async generateCoverImage(
@@ -55,63 +41,48 @@ export class ImageSelectorService {
     return this.generateAiImage(prompt, imageStyle, imageParams);
   }
 
-  /**
-   * 从素材中找到与提示词相关的图片
-   * 使用关键词匹配和相似度判断
-   */
   private async findRelevantImage(
     prompt: string,
     materials: { id: string; imageUrl?: string | null; originalImageUrl?: string | null; hasImage?: boolean; title?: string; content?: string | null }[],
   ): Promise<string | null> {
-    // 筛选有图片的素材
     const materialsWithImages = materials
-      .filter(m => m.hasImage && (m.imageUrl || m.originalImageUrl))
-      .map(m => ({
-        ...m,
-        resolvedImageUrl: m.imageUrl || m.originalImageUrl || null,
+      .filter((material) => material.hasImage && (material.imageUrl || material.originalImageUrl))
+      .map((material) => ({
+        ...material,
+        resolvedImageUrl: material.imageUrl || material.originalImageUrl || null,
       }));
 
     if (materialsWithImages.length === 0) {
       return null;
     }
 
-    // 简单关键词匹配：从 prompt 中提取关键词，与素材标题匹配
     const promptKeywords = this.extractKeywords(prompt.toLowerCase());
 
-    // 计算每个素材的相关性分数
-    const scored = materialsWithImages.map(m => {
-      const titleKeywords = this.extractKeywords((m.title || '').toLowerCase());
-      const contentKeywords = this.extractKeywords((m.content || '').toLowerCase().slice(0, 500));
-
-      // 计算关键词重叠分数
+    const scored = materialsWithImages.map((material) => {
+      const titleKeywords = this.extractKeywords((material.title || '').toLowerCase());
+      const contentKeywords = this.extractKeywords((material.content || '').toLowerCase().slice(0, 500));
       const titleScore = this.calculateOverlap(promptKeywords, titleKeywords);
       const contentScore = this.calculateOverlap(promptKeywords, contentKeywords) * 0.5;
 
       return {
-        imageUrl: m.resolvedImageUrl!,
+        imageUrl: material.resolvedImageUrl!,
         score: titleScore + contentScore,
       };
     });
 
-    // 按分数排序，返回最高分的图片
     scored.sort((a, b) => b.score - a.score);
 
     if (scored[0] && scored[0].score > 0) {
       return scored[0].imageUrl;
     }
 
-    // 如果没有匹配的，随机返回一张（避免总是选第一张）
     const randomIndex = Math.floor(Math.random() * materialsWithImages.length);
     return materialsWithImages[randomIndex].resolvedImageUrl || null;
   }
 
-  /**
-   * 从文本中提取关键词
-   */
   private extractKeywords(text: string): string[] {
-    // 移除常见停用词
     const stopWords = new Set([
-      '的', '是', '在', '和', '了', '有', '我', '他', '她', '它', '这', '那',
+      '的', '是', '在', '和', '了', '有', '我', '你', '他', '她', '这', '那',
       'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
       'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
       'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
@@ -119,31 +90,24 @@ export class ImageSelectorService {
       'and', 'or', 'but', 'if', 'then', 'else', 'when', 'where', 'which',
     ]);
 
-    // 分词（简单实现：按空格和标点分割）
     const words = text
       .replace(/[^\w\u4e00-\u9fa5]/g, ' ')
       .split(/\s+/)
-      .filter(w => w.length > 1 && !stopWords.has(w));
+      .filter((word) => word.length > 1 && !stopWords.has(word));
 
-    // 返回唯一关键词
     return [...new Set(words)];
   }
 
-  /**
-   * 计算两个关键词集合的重叠程度
-   */
   private calculateOverlap(set1: string[], set2: string[]): number {
-    if (set1.length === 0 || set2.length === 0) return 0;
+    if (set1.length === 0 || set2.length === 0) {
+      return 0;
+    }
 
-    const set2Set = new Set(set2);
-    const overlap = set1.filter(w => set2Set.has(w)).length;
-
-    return overlap / Math.sqrt(set1.length * set2.length); // 余弦相似度
+    const set2Map = new Set(set2);
+    const overlap = set1.filter((word) => set2Map.has(word)).length;
+    return overlap / Math.sqrt(set1.length * set2.length);
   }
 
-  /**
-   * AI 生成图片
-   */
   private async generateAiImage(
     prompt: string,
     imageStyle?: string,
@@ -155,9 +119,16 @@ export class ImageSelectorService {
       throw new Error('未配置图片创作模型');
     }
 
-    let finalPrompt = prompt;
+    const hardRules = [
+      '只生成纯视觉画面，不要出现任何文字、中文、英文、数字或标题排版。',
+      '严禁出现 logo、品牌名、水印、角标、二维码、按钮、界面元素、截图元素、海报文案。',
+      '不要做成带标题的封面海报，不要做成小红书截图感、贴纸文案感或宣传海报感。',
+      '如果是人物或场景图，优先自然、真实、克制、干净，适合内容配图，不要夸张特效。',
+    ].join('');
+
+    let finalPrompt = `${prompt}。${hardRules}`;
     if (imageStyle) {
-      finalPrompt = `${imageStyle}。画面主体要求：${prompt}`;
+      finalPrompt = `${imageStyle}。画面主体要求：${prompt}。${hardRules}`;
     }
 
     try {
@@ -180,9 +151,6 @@ export class ImageSelectorService {
     }
   }
 
-  /**
-   * 获取选题关联素材的所有可用图片
-   */
   async getAvailableImages(topicId: string): Promise<string[]> {
     const topic = await this.prisma.topic.findUnique({
       where: { id: topicId },
@@ -203,11 +171,13 @@ export class ImageSelectorService {
       },
     });
 
-    if (!topic) return [];
+    if (!topic) {
+      return [];
+    }
 
     return topic.materials
-      .filter(m => m.material.hasImage && (m.material.imageUrl || m.material.originalImageUrl))
-      .map(m => m.material.imageUrl || m.material.originalImageUrl!)
+      .filter((item) => item.material.hasImage && (item.material.imageUrl || item.material.originalImageUrl))
+      .map((item) => item.material.imageUrl || item.material.originalImageUrl!)
       .filter(Boolean);
   }
 }

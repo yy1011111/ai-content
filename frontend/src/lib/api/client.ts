@@ -7,7 +7,7 @@ function getApiBase() {
     try {
       const parsed = new URL(baseUrl);
       const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-      if (loopbackHosts.has(parsed.hostname) && loopbackHosts.has(currentHostname)) {
+      if (loopbackHosts.has(parsed.hostname)) {
         parsed.hostname = currentHostname;
         return parsed.toString().replace(/\/$/, "");
       }

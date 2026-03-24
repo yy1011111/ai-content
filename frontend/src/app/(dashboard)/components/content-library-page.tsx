@@ -542,15 +542,18 @@ export function ContentLibraryPage({
         setArticleToPublish(article);
         try {
             const accounts = await publishingApi.getAccounts();
-            setPublishAccounts(accounts);
-            if (accounts.length > 0) {
-                setSelectedAccountId(accounts[0].id);
-            }
+            const matchedAccounts = accounts.filter((account) =>
+                isXiaohongshu ? account.platform === "xiaohongshu" : account.platform === "wechat",
+            );
+
+            setPublishAccounts(matchedAccounts);
+            setSelectedAccountId(matchedAccounts.length > 0 ? matchedAccounts[0].id : "");
         } catch {
-            // ignore
+            setPublishAccounts([]);
+            setSelectedAccountId("");
         }
         onPublishOpen();
-    }, [allowPublish, onPublishOpen]);
+    }, [allowPublish, isXiaohongshu, onPublishOpen]);
 
     const confirmPublish = async () => {
         if (!articleToPublish || (!selectedAccountId && publishAccounts.length > 0)) {
@@ -559,8 +562,12 @@ export function ContentLibraryPage({
         }
         setIsPublishing(true);
         try {
-            await publishingApi.publishArticle(articleToPublish.id, selectedAccountId);
-            addToast({ title: `${publishLabel}请求成功`, color: "success" });
+            const result = await publishingApi.publishArticle(articleToPublish.id, selectedAccountId);
+            addToast({
+                title: result.deliveryStatus === "published" ? `${publishLabel}成功` : `${publishLabel}已提交`,
+                description: result.message,
+                color: "success",
+            });
             fetchData();
             onPublishClose();
         } catch (error: unknown) {
