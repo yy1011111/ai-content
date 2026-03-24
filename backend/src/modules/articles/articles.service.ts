@@ -147,9 +147,12 @@ export class ArticlesService {
                     ]);
 
                     const stylePrompt = articleStyle?.promptTemplate || this.getDefaultStylePrompt(contentType);
-                    const templateHtml = articleTemplate?.promptTemplate?.trim() || '';
+                    const templateHtml =
+                        contentType === 'article'
+                            ? (articleTemplate?.promptTemplate?.trim() || this.getDefaultArticleTemplate())
+                            : '';
                     const templateNotes = this.readTemplateNotes(articleTemplate?.parameters);
-                    const contentFormat: ArticleContentFormat = contentType === 'article' && templateHtml ? 'html' : 'markdown';
+                    const contentFormat: ArticleContentFormat = contentType === 'article' ? 'html' : 'markdown';
 
                     const config = await this.defaultModels.getDefaults();
                     if (!config.articleCreation) {
@@ -489,14 +492,17 @@ ${templateHtml}
 ${templateNotes || '无额外备注'}
 
 【排版与配图法则】：
-1. 必须保留模板主体结构、内联样式、模块顺序和视觉层级。
-2. 必须直接输出完整 HTML，不要输出 Markdown，不要输出代码块围栏。
-3. 模板中的示例文案要替换成真实内容，但不要删除关键模块。
-4. 所有图片节点必须保留在 HTML 中，且 \`src\` 使用占位符：
+1. 必须保留模板主体结构、模块顺序和主要 class 名，但允许把不需要的占位文案替换成真实内容。
+2. 必须直接输出完整 HTML，不要输出 Markdown，不要输出代码块围栏，不要解释你的写法。
+3. 文章要写得像成熟公众号正式成稿，而不是提纲、素材拼接或营销文案。开头要能把人拉进去，中间要有事实、有观察、有判断，结尾要有收束。
+4. 段落要短，一段尽量 1 到 3 句；至少给出 3 个有信息量的小标题，避免大段密集文字。
+5. 图片不是硬性任务。正文总共最多保留 0 到 2 张图；如果没有真正贴切的图，宁可不要，也不要为了凑版面瞎配图。
+6. 只有当图片能明显帮助理解、补足场景或增强可信度时，才保留图片节点；否则可以整段删掉对应的 \`figure\`。
+7. 如需图片，占位符只能使用：
 - 真实素材图：\`[real-image-详细描述]\`
 - AI 生成图：\`[ai-image-详细精准的视觉画面描述]\`
-5. 如果素材中存在可复用原图，至少优先使用 1 张 \`[real-image-...]\`。
-6. 不要填写真实图片 URL，不要省略图片节点，不要输出脚本标签。
+8. 优先使用真实素材图；只有正文确实需要抽象示意或封面感插图时，才使用 AI 图。
+9. 不要填写真实图片 URL，不要输出脚本标签，不要在正文里出现“以下是文章内容”“欢迎阅读”等废话。
 
 【输出格式】：
 严格按下面格式返回，不要输出 JSON，不要输出 Markdown 代码块，不要附加解释：
@@ -514,11 +520,15 @@ HTML_END`;
 ${stylePrompt}
 
 【排版与配图法则】：
-你在文章中需要穿插 2 到 3 张配图。根据内容需求选择合适的配图类型：
+请写出一篇像成熟公众号成稿一样的中文文章，不要写成提纲、汇报稿或新闻搬运稿。
+1. 开头必须快速进入问题、冲突、代入感或核心观察，不要空泛起手。
+2. 正文至少有 3 个清晰的小标题；每段尽量短，保证手机阅读时有呼吸感。
+3. 可以穿插配图，但正文总共最多 0 到 2 张；如果没有贴切图片，宁可不要。
+4. 根据内容需求选择合适的配图类型：
 - 产品截图、数据图表、真实场景照片 → 使用 \`[real-image-详细描述]\`
 - 概念图、创意插图、抽象表达 → 使用 \`[ai-image-详细精准的视觉画面描述]\`
-
-重要规则：如果参考素材里存在“有可复用原图”的素材，必须优先至少使用 1 张 \`[real-image-...]\`；只有确实需要概念插图时才使用 \`[ai-image-...]\`。
+5. 真实素材图优先；AI 图只在非常必要时使用。
+6. 不要为了凑排版强行插图，不要输出与正文弱相关的配图描述。
 
 【输出格式】：
 你的回复必须是纯 JSON：
@@ -781,12 +791,45 @@ ${params.materialContents}`;
 
     private getDefaultStylePrompt(contentType: ArticleContentType): string {
         if (contentType === 'xiaohongshu') {
-            return '你是一个懂选题、懂情绪价值、懂口语化表达的小红书内容创作者，请写出真实、有观点、有传播感的中文笔记。';
+            return '你是一个懂选题、懂平台语感、懂情绪共鸣的小红书内容创作者。请写得真实、口语化、可转述，重点前置，少讲大道理，像一个有经验的人在把踩坑、结论和感受直接讲给读者听。';
         }
 
-        return '你是一个专业的内容创作者，请清晰、逻辑严密地撰写文章。';
+        return '你是一名擅长写微信公众号文章的中文作者。文章要像成熟账号发出的正式成稿：开头能把人拽进去，中段有信息和判断，结尾有收束和余味。不要写成模板腔、汇报腔、新闻拼盘，也不要故作高深。段落要短，语气自然，有观点，但不硬拗立场。优先写出画面、细节、情绪和真正值得说的判断。';
     }
 
+    private getDefaultArticleTemplate(): string {
+        return `<article class="wechat-article">
+  <section class="wechat-intro">
+    <p class="wechat-lead">这里写开篇引子。第一段要直接进入情境、冲突或问题，不要空泛铺垫。</p>
+  </section>
+
+  <section class="wechat-section">
+    <h2>先把事情说透</h2>
+    <p>这里写第一部分正文。用两到三段把事件、现象或问题讲清楚，每段尽量短一点。</p>
+    <p>这里继续补充关键事实、用户感受或作者观察，避免套话。</p>
+  </section>
+
+  <section class="wechat-section">
+    <h2>真正值得聊的是</h2>
+    <p>这里写第二部分正文。给出判断、拆解原因，或者指出最容易被忽略的地方。</p>
+    <blockquote>这里放一句最值得被记住的话，适合作为金句或观点提炼。</blockquote>
+  </section>
+
+  <figure class="wechat-figure">
+    <img src="[real-image-与正文强相关的真实配图描述]" alt="配图说明" />
+    <figcaption>如果图片不够贴切，可以整段删除，不要为了凑图保留无关图片。</figcaption>
+  </figure>
+
+  <section class="wechat-section">
+    <h2>给读者一个带走的结论</h2>
+    <p>这里写最后一部分正文。总结最核心的结论、提醒或态度，不要草草收尾。</p>
+    <ul>
+      <li>可以保留 2 到 3 条真正有用的要点</li>
+      <li>也可以删掉列表，改成更自然的收束段落</li>
+    </ul>
+  </section>
+</article>`;
+    }
 
     private async generateArticlePayload(params: {
         modelId: string;
@@ -1272,7 +1315,7 @@ HTML_END`;
         const safeSummary = topicSummary.trim() || '无摘要';
         const keywordText = keywords.length > 0 ? keywords.join('、') : '无';
 
-        return `请为下面这篇文章生成一张“公众号封面图”，这不是正文插图，而是用于文章头图的独立视觉。
+        return `请为下面这篇文章生成一张“微信公众号头图”，它不是正文插图，而是文章封面。
 
 【文章标题】
 ${topicTitle}
@@ -1284,9 +1327,11 @@ ${safeSummary}
 ${keywordText}
 
 【封面要求】
-1. 画面必须有强烈主视觉，要吸引人。
-2. 最好包含核心关键词/标题，但不能文字太多。
-3. 不要做成正文配图拼贴，不要做成多宫格截图。`;
+1. 整体气质要像成熟公众号会用的头图，干净、克制、易读，不要花哨，不要廉价感。
+2. 主视觉要明确，但不要做成信息过载的海报，也不要拼贴很多小元素。
+3. 如果要出现文字，只保留极少量关键词或短句，避免大段文案堆在图上。
+4. 画面应优先贴合文章主题和读者感受，不要为了“酷炫”偏离主题。
+5. 避免驴唇不对马嘴的抽象概念图，避免低质量 AI 感、夸张光效、赛博霓虹、复杂背景。`;
     }
 
     private async renderImages(params: {
@@ -1303,26 +1348,6 @@ ${keywordText}
         const realImageRegex = /\[real-image-([^\]]+)\]/g;
         const aiImageRegex = /\[ai-image-([^\]]+)\]/g;
         const legacyImageRegex = /\[image-([^\]]+)\]/g;
-
-        const availableRealImages = params.materialInfos.filter((m) => m.hasImage && m.imageUrl);
-
-        if (availableRealImages.length > 0) {
-            const currentRealMatches = [...renderedContent.matchAll(realImageRegex)];
-            const aiOrLegacyMatches = [
-                ...[...renderedContent.matchAll(aiImageRegex)].map((match) => ({ placeholder: match[0], prompt: match[1] })),
-                ...[...renderedContent.matchAll(legacyImageRegex)].map((match) => ({ placeholder: match[0], prompt: match[1] })),
-            ];
-
-            const desiredRealCount = Math.min(availableRealImages.length, Math.min(2, currentRealMatches.length + aiOrLegacyMatches.length));
-            const missingRealCount = Math.max(0, desiredRealCount - currentRealMatches.length);
-
-            if (missingRealCount > 0 && aiOrLegacyMatches.length > 0) {
-                for (let i = 0; i < Math.min(missingRealCount, aiOrLegacyMatches.length); i++) {
-                    const item = aiOrLegacyMatches[i];
-                    renderedContent = renderedContent.replace(item.placeholder, `[real-image-${item.prompt}]`);
-                }
-            }
-        }
 
         if (params.imageCreationEnabled) {
             const imageTasks: Promise<ImageTaskResult>[] = [];
