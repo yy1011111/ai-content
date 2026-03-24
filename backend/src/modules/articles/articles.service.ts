@@ -86,6 +86,7 @@ const ARTICLE_MAX_GENERATION_ATTEMPTS = 3;
 const ARTICLE_MARKDOWN_MAX_TOKENS = 4000;
 const ARTICLE_HTML_MAX_TOKENS = 12000;
 const ARTICLE_HTML_CONTINUATION_MAX_TOKENS = 6000;
+const ARTICLE_REWRITE_MAX_TOKENS = 4500;
 
 type HtmlValidationResult = {
     isComplete: boolean;
@@ -1331,7 +1332,7 @@ ${params.materialContents}`;
         imageStyleParams?: { ratio?: string; resolution?: string };
         imageCreationEnabled: boolean;
     }): Promise<GeneratedArticlePayload> {
-        const markdownPayload = await this.generateArticlePayload({
+        const markdownDraft = await this.generateArticlePayload({
             modelId: params.modelId,
             systemPrompt: this.buildWechatContinuousSystemPrompt(params.stylePrompt, params.articleSystemPrompt),
             userPrompt: this.buildWechatContinuousUserPrompt({
@@ -1343,6 +1344,13 @@ ${params.materialContents}`;
             fallbackTitle: params.topicTitle,
             contentFormat: 'markdown',
             templateHtml: '',
+        });
+
+        const markdownPayload = await this.rewriteWechatArticlePayload({
+            modelId: params.modelId,
+            topicTitle: params.topicTitle,
+            draftTitle: markdownDraft.title,
+            draftContent: markdownDraft.content,
         });
 
         const renderedMarkdown = await this.renderImages({
@@ -1362,6 +1370,56 @@ ${params.materialContents}`;
             content: compiledHtml,
             contentFormat: 'html',
         };
+    }
+
+    private async rewriteWechatArticlePayload(params: {
+        modelId: string;
+        topicTitle: string;
+        draftTitle: string;
+        draftContent: string;
+    }): Promise<GeneratedArticlePayload> {
+        const aiResponseText = await this.aiClient.generate(
+            params.modelId,
+            [
+                {
+                    role: 'system',
+                    content: `你是一名资深公众号主笔，现在只做一件事：把一篇“已经有料但写得发散、像拼装稿的初稿”，重写成一篇真正顺着读下去的公众号成稿。
+
+【改写目标】
+1. 保留原文的核心事实、判断和刺点，但把全文重新组织成一条往前推进的叙事/议论链。
+2. 消除“卡片感”“答题感”“一段一个结论”的拼装味，不能写成一节一节的素材堆叠。
+3. 默认不要加小标题；确实需要时，全文最多保留 1-2 个，而且必须真正推进内容，而不是给段落贴标签。
+4. 段落可以短，但段与段之间必须有承接，上一段自然把下一段带出来，不能像被硬切开。
+5. 优先把文章写成“能一口气读下去”的成稿，而不是“方便摘句”的卡片文。
+6. 结尾自然收束，不要口号，不要鸡汤，不要拔高。
+7. 不要引入新事实，不要扩写成空话，不要重复同一个观点。
+8. 这是正文重写，不要输出 HTML，不要解释你的改法。
+
+【输出格式】
+只返回 JSON：
+{"title":"优化后的标题","content":"markdown 正文"}`,
+                },
+                {
+                    role: 'user',
+                    content: `请把下面这篇公众号初稿，改写成一篇更像“整篇写完的文章”。
+
+【选题】
+${params.topicTitle}
+
+【当前标题】
+${params.draftTitle}
+
+【当前初稿】
+${params.draftContent}`,
+                },
+            ],
+            {
+                temperature: 0.45,
+                maxTokens: ARTICLE_REWRITE_MAX_TOKENS,
+            },
+        );
+
+        return this.parseArticlePayload(aiResponseText, params.draftTitle, 'markdown');
     }
 
     private buildWechatContinuousSystemPrompt(stylePrompt: string, articleSystemPrompt: string): string {
@@ -1403,8 +1461,9 @@ ${params.keywords.join('、') || '无'}
 2. 不要写成提纲，不要写成新闻综述，不要一段一个孤立结论，不要到处塞金句和空洞小标题。
 3. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
 4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤。
-5. 可以有 3-4 个真正有信息量的小标题，但每个小标题下面都要推动文章往前走。
-6. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1-2 个，而且必须真正承担转场作用。
+6. 每一段都要接住上一段，像自然往下讲，而不是重新起一个模块。
+7. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
 
 【素材】
 ${params.materialContents}
