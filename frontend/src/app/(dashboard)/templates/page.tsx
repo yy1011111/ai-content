@@ -51,6 +51,8 @@ const TEMPLATE_PLACEHOLDERS = [
     "[ai-image-图片描述]",
 ];
 
+const DEFAULT_NOTES = "建议保留图片占位符，交给系统在生成后自动替换成真实图片地址。";
+
 export default function TemplatesPage() {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -64,22 +66,19 @@ export default function TemplatesPage() {
         promptTemplate: "",
         parameters: {
             placeholders: TEMPLATE_PLACEHOLDERS.join("\n"),
-            notes: "建议保留图片占位符，交给系统在生成后自动替换真实图片地址。",
+            notes: DEFAULT_NOTES,
         },
     });
 
     useEffect(() => {
         loadIcons([
-            "solar:widget-2-outline",
             "solar:add-circle-bold",
             "solar:pen-linear",
             "solar:trash-bin-trash-linear",
             "solar:star-bold",
-            "solar:star-outline",
             "solar:upload-minimalistic-linear",
             "solar:code-square-linear",
             "solar:document-text-linear",
-            "solar:danger-triangle-linear",
         ]);
     }, []);
 
@@ -106,7 +105,7 @@ export default function TemplatesPage() {
             promptTemplate: "",
             parameters: {
                 placeholders: TEMPLATE_PLACEHOLDERS.join("\n"),
-                notes: "建议保留图片占位符，交给系统在生成后自动替换真实图片地址。",
+                notes: DEFAULT_NOTES,
             },
         });
     }, []);
@@ -125,7 +124,7 @@ export default function TemplatesPage() {
             promptTemplate: template.promptTemplate,
             parameters: {
                 placeholders: String(template.parameters?.placeholders || TEMPLATE_PLACEHOLDERS.join("\n")),
-                notes: String(template.parameters?.notes || ""),
+                notes: String(template.parameters?.notes || DEFAULT_NOTES),
             },
         });
         onOpen();
@@ -170,7 +169,7 @@ export default function TemplatesPage() {
             addToast({ title: "模板内容已导入", color: "success" });
         };
         reader.onerror = () => {
-            addToast({ title: "模板导入失败", description: "读取文件时发生错误", color: "danger" });
+            addToast({ title: "导入失败", description: "读取文件时发生错误", color: "danger" });
         };
         reader.readAsText(file, "utf-8");
         event.target.value = "";
@@ -218,12 +217,11 @@ export default function TemplatesPage() {
 
     return (
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 pb-10">
-
-            <header className="rounded-medium border-small border-white/10 flex items-center justify-between gap-3 p-5 bg-background/60 backdrop-blur-md shadow-sm">
+            <header className="rounded-medium border-small border-white/10 bg-background/60 p-5 shadow-sm backdrop-blur-md">
                 <div className="flex flex-col">
-                    <h2 className="text-xl text-default-900 font-bold">文章模板</h2>
-                    <span className="text-small text-default-500 mt-1">
-                        管理文章生成使用的 HTML 模板，保持结构稳定、占位符清晰，并统一接入后续生成与发布链路。
+                    <h2 className="text-xl font-bold text-default-900">文章模板</h2>
+                    <span className="mt-1 text-small text-default-500">
+                        管理公众号文章的 HTML 模板。这里决定段落节奏、标题样式、引用块和配图位置。
                     </span>
                 </div>
             </header>
@@ -236,7 +234,7 @@ export default function TemplatesPage() {
                                 <div>
                                     <h3 className="text-medium font-bold text-default-900">HTML 模板管理</h3>
                                     <p className="mt-1 text-small text-default-500">
-                                        支持 HTML 导入、在线编辑和全局默认模板切换。
+                                        支持 HTML 导入、在线编辑和默认模板切换。
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3">
@@ -257,9 +255,8 @@ export default function TemplatesPage() {
                                 <div className="flex justify-center py-16">
                                     <Spinner size="lg" />
                                 </div>
-
                             ) : (
-                                <Table aria-label="文章模板列表" className="border-small border-divider rounded-medium shadow-sm bg-background">
+                                <Table aria-label="文章模板列表" className="rounded-medium border-small border-divider bg-background shadow-sm">
                                     <TableHeader>
                                         <TableColumn>模板名称</TableColumn>
                                         <TableColumn>状态</TableColumn>
@@ -273,9 +270,7 @@ export default function TemplatesPage() {
                                                 <TableCell className="align-top">
                                                     <div className="flex flex-col gap-1">
                                                         <span className="font-semibold text-default-900">{template.name}</span>
-                                                        <span className="text-xs text-default-400">
-                                                            {template.promptTemplate.length} 个字符
-                                                        </span>
+                                                        <span className="text-xs text-default-400">{template.promptTemplate.length} 个字符</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="align-top">
@@ -337,9 +332,9 @@ export default function TemplatesPage() {
                                 </div>
                             </div>
                             <div className="space-y-4 text-sm leading-8 text-default-600">
-                                <p>模板建议保留固定结构，让 AI 只填充内容，不擅自改动关键样式区块。</p>
-                                <p>正文图片建议写成占位符，后续系统会统一替换成真实图片地址并输出最终 HTML。</p>
-                                <p>如果模板里有特殊模块，比如时间线、特性卡、CTA 区域，建议直接把该 HTML 结构放进模板正文。</p>
+                                <p>模板负责排版和结构，不负责把文章写好。好的模板应该让正文更顺眼，而不是把内容压成一整坨。</p>
+                                <p>建议保留标题、小标题、引用块和图片位置这些骨架，让系统只替换内容本身。</p>
+                                <p>图片节点建议保留占位符，后续由系统替换真实图片地址；如果图片不够贴切，宁可删掉对应模块。</p>
                             </div>
                             <Divider className="my-5" />
                             <div className="flex flex-wrap gap-2">
@@ -373,21 +368,21 @@ export default function TemplatesPage() {
                                 <Input
                                     label="模板名称"
                                     labelPlacement="outside"
-                                    placeholder="例如：紫色科技深度长文"
+                                    placeholder="例如：极简深度评论版"
                                     value={formData.name}
                                     onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
                                 />
                                 <Input
                                     label="模板说明"
                                     labelPlacement="outside"
-                                    placeholder="说明这个模板适合哪类文章、有什么固定模块"
+                                    placeholder="说明适合什么文章、版式重点是什么"
                                     value={formData.description}
                                     onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
                                 />
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
                                         <p className="text-sm font-semibold text-default-700">模板 HTML</p>
-                                        <p className="text-xs text-default-400">可直接粘贴 HTML，也可以从本地导入 `.html` 文件。</p>
+                                        <p className="text-xs text-default-400">可以直接粘贴 HTML，也可以从本地导入 `.html` 文件。</p>
                                     </div>
                                     <Button
                                         variant="flat"
@@ -411,7 +406,7 @@ export default function TemplatesPage() {
                                     minRows={8}
                                     label="推荐占位符"
                                     labelPlacement="outside"
-                                    description="每行一个，用于提示后续 AI 和渲染流程有哪些槽位可填。"
+                                    description="每行一个，用于提示后续生成和渲染流程有哪些槽位可替换。"
                                     value={formData.parameters.placeholders}
                                     onChange={(event) =>
                                         setFormData((current) => ({
@@ -424,8 +419,8 @@ export default function TemplatesPage() {
                                     minRows={8}
                                     label="模板备注"
                                     labelPlacement="outside"
-                                    description="记录这个模板的生成约束、图片约定或特殊模块说明。"
-                                    placeholder="例如：顶部英雄区必须保留 3 个指标卡，时间线部分固定 3 个案例。"
+                                    description="记录这个模板的使用场景、图片规则或特殊结构说明。"
+                                    placeholder="例如：适合热点评论，要求必须有导语卡片和一个引用块。"
                                     value={formData.parameters.notes}
                                     onChange={(event) =>
                                         setFormData((current) => ({
@@ -441,11 +436,9 @@ export default function TemplatesPage() {
                                             <Icon icon="solar:document-text-linear" width={18} />
                                             录入建议
                                         </div>
-                                        <p>把模板里的示例文案保留下来没有问题，后续会作为 AI 的结构参考。</p>
-                                        <p>如果某个模块必须存在，不要删掉结构，只替换成更明确的占位符。</p>
-                                        <p>
-                                            图片节点建议保留 <code>&lt;img src=&quot;...&quot;&gt;</code>，只把地址写成占位符即可。
-                                        </p>
+                                        <p>保留模板中的结构块，避免让 AI 每次自己重新拼版式。</p>
+                                        <p>如果某个模块必须存在，就保留该 HTML 结构，只把文案替换成更清晰的占位符。</p>
+                                        <p>图片节点保留 <code>&lt;img src="..." /&gt;</code> 即可，后续由系统替换真实地址。</p>
                                     </CardBody>
                                 </Card>
                             </div>

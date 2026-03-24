@@ -1,7 +1,7 @@
 import { marked } from 'marked';
 import * as cheerio from 'cheerio';
 import juice from 'juice';
-import { WECHAT_DEFAULT_CSS, WECHAT_HEADER_HTML, WECHAT_FOOTER_HTML } from './wechat-style';
+import { WECHAT_DEFAULT_CSS, WECHAT_FOOTER_HTML, WECHAT_HEADER_HTML } from './wechat-style';
 
 export class WechatCompiler {
     static async compile(markdown: string): Promise<string> {
@@ -35,8 +35,27 @@ export class WechatCompiler {
             $(paragraphs[0]).addClass('wechat-lead');
         }
 
+        $('h2, h3, h4').each((_index, heading) => {
+            const node = $(heading);
+            const text = node.text().replace(/\s+/g, ' ').trim();
+            if (!text) {
+                node.remove();
+            }
+        });
+
+        $('p').each((_index, paragraph) => {
+            const node = $(paragraph);
+            const text = node.text().replace(/\s+/g, ' ').trim();
+            if (!text && node.find('img').length === 0) {
+                node.remove();
+            }
+        });
+
         $('img').each((_index, img) => {
             const image = $(img);
+            const currentAlt = image.attr('alt')?.trim();
+            const alt = currentAlt && currentAlt !== '正文配图' ? currentAlt : '';
+
             if (!image.attr('alt')) {
                 image.attr('alt', '正文配图');
             }
@@ -46,12 +65,15 @@ export class WechatCompiler {
             }
 
             const figure = image.closest('figure');
-            if (figure.find('figcaption').length === 0) {
-                const alt = image.attr('alt')?.trim();
-                if (alt) {
-                    figure.append(`<figcaption>${alt}</figcaption>`);
-                }
+            if (figure.find('figcaption').length === 0 && alt) {
+                figure.append(`<figcaption>${alt}</figcaption>`);
             }
+        });
+
+        $('hr').each((_index, hr) => {
+            const node = $(hr);
+            node.after('<div class="wechat-divider"></div>');
+            node.remove();
         });
 
         $('section, article').each((_index, section) => {
