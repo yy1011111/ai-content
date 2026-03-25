@@ -251,6 +251,7 @@ export class ArticlesService {
                         topicTitle: topic.title,
                         topicSummary: topic.summary || '',
                         keywords: topic.keywords,
+                        materialInfos,
                         imageStylePrompt,
                         imageStyleParams,
                         imageCreationEnabled: Boolean(config.imageCreation),
@@ -1401,15 +1402,22 @@ ${params.materialContents}`;
             templateHtml: '',
         });
 
+        const normalizedDraftContent = this.prepareWechatDraftMarkdown(markdownDraft.content);
+
         const markdownPayload = await this.rewriteWechatArticlePayload({
             modelId: params.modelId,
             topicTitle: params.topicTitle,
             draftTitle: markdownDraft.title,
-            draftContent: markdownDraft.content,
+            draftContent: normalizedDraftContent,
         });
 
+        const normalizedMarkdownPayload = {
+            ...markdownPayload,
+            content: this.finalizeWechatMarkdown(markdownPayload.content),
+        };
+
         const renderedMarkdown = await this.renderImages({
-            content: markdownPayload.content,
+            content: normalizedMarkdownPayload.content,
             contentFormat: 'markdown',
             materialInfos: params.materialInfos,
             imageStylePrompt: params.imageStylePrompt,
@@ -1421,7 +1429,7 @@ ${params.materialContents}`;
         const compiledHtml = await WechatCompiler.compile(renderedMarkdown.content);
 
         return {
-            title: markdownPayload.title,
+            title: normalizedMarkdownPayload.title,
             content: compiledHtml,
             contentFormat: 'html',
         };
@@ -1446,9 +1454,11 @@ ${params.materialContents}`;
 3. 默认不要加小标题；确实需要时，全文最多保留 1-2 个，而且必须真正推进内容，而不是给段落贴标签。
 4. 段落可以短，但段与段之间必须有承接，上一段自然把下一段带出来，不能像被硬切开。
 5. 优先把文章写成“能一口气读下去”的成稿，而不是“方便摘句”的卡片文。
-6. 结尾自然收束，不要口号，不要鸡汤，不要拔高。
-7. 不要引入新事实，不要扩写成空话，不要重复同一个观点。
-8. 这是正文重写，不要输出 HTML，不要解释你的改法。
+ 6. 语言要像真人在讲，不要显摆文笔，不要连珠比喻，不要一段一个“精致句子”。
+ 7. 少用“这背后是……”“这揭示了……”“某种隐喻”这种解释腔，不要写成媒体评论腔。
+ 8. 结尾自然收束，不要口号，不要鸡汤，不要拔高。
+ 9. 不要引入新事实，不要扩写成空话，不要重复同一个观点，不要把整篇文章再说一遍。
+ 10. 这是正文重写，不要输出 HTML，不要解释你的改法。
 
 【输出格式】
 只返回 JSON：
@@ -1469,7 +1479,7 @@ ${params.draftContent}`,
                 },
             ],
             {
-                temperature: 0.45,
+                temperature: 0.25,
                 maxTokens: ARTICLE_REWRITE_MAX_TOKENS,
             },
         );
@@ -1484,11 +1494,12 @@ ${params.draftContent}`,
 【本次生成规则】
 1. 这一步只负责把正文一口气写顺，先写成完整 markdown 成稿，不要输出 HTML，不要自己套模板，不要思考排版。
 2. 整篇文章必须像一篇自然连贯的公众号成稿，而不是按提纲填空、不是卡片拼接、不是一段一个观点标签。
-3. 允许有小标题，但小标题是帮助推进，不是把文章切碎；每一段都要和上一段有承接。
-4. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
-5. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔。优先画面感、判断力和作者存在感。
-6. 正文里最多保留 0-2 个图片占位符；没有必要就不要硬插图。
-7. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
+ 3. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，全文最多 1-2 个。
+ 4. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
+ 5. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔、媒体评论腔。少用比喻，少用“这背后是……”之类的解释句。
+ 6. 能用大白话讲清楚，就不要写成修辞表演。宁可直接，也不要精致得发假。
+ 7. 正文里最多保留 0-1 个图片占位符；没有必要就不要插图。默认优先真实图片，不要为了排版硬凑 AI 图。
+ 8. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
 
 【补充风格】
 ${stylePrompt}`;
@@ -1515,10 +1526,11 @@ ${params.keywords.join('、') || '无'}
 1. 整篇文章要一气呵成，重点是“连贯”“顺着读下去”“像一个成熟作者真的写完了一篇文章”。
 2. 不要写成提纲，不要写成新闻综述，不要一段一个孤立结论，不要到处塞金句和空洞小标题。
 3. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
-4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤。
+ 4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤，不要把全文重新概括一遍。
 5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1-2 个，而且必须真正承担转场作用。
 6. 每一段都要接住上一段，像自然往下讲，而不是重新起一个模块。
-7. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+ 7. 语言要直接、自然、像真人在说话。不要一段一个漂亮比喻，不要频繁写“某种隐喻”“这背后是”“这揭示了”。
+ 8. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
 
 【素材】
 ${params.materialContents}
@@ -1526,6 +1538,65 @@ ${params.materialContents}
 【输出格式】
 只返回 JSON：
 {"title":"文章标题","content":"markdown 正文"}`;
+    }
+
+    private prepareWechatDraftMarkdown(content: string): string {
+        return this.normalizeWechatMarkdown(content, { preserveRealImages: false });
+    }
+
+    private finalizeWechatMarkdown(content: string): string {
+        return this.normalizeWechatMarkdown(content, { preserveRealImages: true });
+    }
+
+    private normalizeWechatMarkdown(
+        content: string,
+        options: { preserveRealImages: boolean },
+    ): string {
+        const seenBlocks = new Set<string>();
+        let normalized = this.stripCodeFence(content.trim()).replace(/\r\n/g, '\n');
+
+        normalized = normalized.replace(/\[(?:ai-image|image)-[^\]]+\]/g, '');
+        normalized = normalized.replace(/\[real-image-[^\]]+\]/g, (match) => {
+            if (!options.preserveRealImages) {
+                return '';
+            }
+
+            if (seenBlocks.has(`image:${match}`)) {
+                return '';
+            }
+
+            seenBlocks.add(`image:${match}`);
+            return match;
+        });
+
+        const blocks = normalized
+            .split(/\n{2,}/)
+            .map((block) => block.trim())
+            .filter(Boolean);
+
+        const dedupedBlocks: string[] = [];
+        for (const block of blocks) {
+            const fingerprint = block
+                .toLowerCase()
+                .replace(/[#>*`_~\-]/g, '')
+                .replace(/[^\p{L}\p{N}]/gu, '');
+
+            if (fingerprint.length >= 18) {
+                if (seenBlocks.has(fingerprint)) {
+                    continue;
+                }
+
+                seenBlocks.add(fingerprint);
+            }
+
+            dedupedBlocks.push(block);
+        }
+
+        return dedupedBlocks
+            .join('\n\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .trim();
     }
 
     private async generateArticlePayload(params: {
@@ -1550,7 +1621,7 @@ ${params.materialContents}
                     { role: 'user', content: finalUserPrompt },
                 ],
                 {
-                    temperature: 0.7,
+                    temperature: params.contentFormat === 'html' ? 0.7 : 0.55,
                     maxTokens: params.contentFormat === 'html' ? ARTICLE_HTML_MAX_TOKENS : ARTICLE_MARKDOWN_MAX_TOKENS,
                 },
             );
@@ -1969,10 +2040,27 @@ HTML_END`;
         topicTitle: string;
         topicSummary: string;
         keywords: string[];
+        materialInfos: MaterialInfo[];
         imageStylePrompt?: string;
         imageStyleParams?: { ratio?: string; resolution?: string };
         imageCreationEnabled: boolean;
     }): Promise<string | null> {
+        const realCover = await this.imageSelector.selectImage(
+            'real',
+            `${params.topicTitle} ${params.topicSummary}`.trim(),
+            params.materialInfos,
+            undefined,
+            undefined,
+            { allowAiFallback: false },
+        );
+
+        if (realCover) {
+            const infoMsg = `选题「${params.topicTitle}」优先复用真实素材图作为封面`;
+            this.logger.log(infoMsg);
+            await this.systemLogsService.record(infoMsg, 'info');
+            return realCover;
+        }
+
         if (!params.imageCreationEnabled) {
             const warnMsg = `选题「${params.topicTitle}」未配置图片模型，跳过独立封面生成`;
             this.logger.warn(warnMsg);
@@ -2054,7 +2142,14 @@ ${keywordText}
                 const placeholder = match[0];
                 const prompt = match[1];
                 imageTasks.push(
-                    this.imageSelector.selectImage('real', prompt, params.materialInfos, params.imageStylePrompt, params.imageStyleParams)
+                    this.imageSelector.selectImage(
+                        'real',
+                        prompt,
+                        params.materialInfos,
+                        params.imageStylePrompt,
+                        params.imageStyleParams,
+                        { allowAiFallback: false },
+                    )
                         .then((url) => ({ placeholder, url, success: Boolean(url) }))
                         .catch((error: Error) => ({ placeholder, url: null, success: false, errorDetail: error.message }))
                 );
@@ -2129,14 +2224,14 @@ ${keywordText}
                 return content.replace(pattern, '');
             }
 
-            return content.replace(pattern, (_match, prompt: string) => `\n> [未配置画图模型，本欲插图：${prompt}]\n`);
+            return content.replace(pattern, '');
         }
 
         if (contentFormat === 'html') {
             return content.replaceAll(placeholder, '');
         }
 
-        return content.replaceAll(placeholder, `\n> [图片获取失败，原因：${errorMessage}]\n`);
+        return content.replaceAll(placeholder, '');
     }
 
     private cleanupHtml(content: string): string {

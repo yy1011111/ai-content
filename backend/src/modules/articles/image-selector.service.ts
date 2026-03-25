@@ -19,12 +19,18 @@ export class ImageSelectorService {
     materials: { id: string; imageUrl?: string | null; originalImageUrl?: string | null; hasImage?: boolean; title?: string; content?: string | null }[],
     imageStyle?: string,
     imageParams?: { ratio?: string; resolution?: string },
+    options?: { allowAiFallback?: boolean },
   ): Promise<string | null> {
     if (type === 'real') {
       const realImage = await this.findRelevantImage(prompt, materials);
       if (realImage) {
         this.logger.log(`使用真实图片: ${realImage}`);
         return realImage;
+      }
+
+      if (options?.allowAiFallback === false) {
+        this.logger.log('未找到合适的真实图片，本次不降级使用 AI 生成');
+        return null;
       }
 
       this.logger.log('未找到合适的真实图片，降级使用 AI 生成');
@@ -122,8 +128,9 @@ export class ImageSelectorService {
     const hardRules = [
       '只生成纯视觉画面，不要出现任何文字、中文、英文、数字或标题排版。',
       '严禁出现 logo、品牌名、水印、角标、二维码、按钮、界面元素、截图元素、海报文案。',
-      '不要做成带标题的封面海报，不要做成小红书截图感、贴纸文案感或宣传海报感。',
-      '如果是人物或场景图，优先自然、真实、克制、干净，适合内容配图，不要夸张特效。',
+      '不要做成带标题的封面海报，不要做成小红书截图感、贴纸文案感、宣传海报感或资讯封面感。',
+      '即使是背景中的屏幕、招牌、电脑页面、路牌，也尽量不要出现可识别文字。',
+      '如果是人物或场景图，优先自然、真实、克制、干净，适合内容配图，不要夸张特效、赛博霓虹、荧光大字。',
     ].join('');
 
     let finalPrompt = `${prompt}。${hardRules}`;

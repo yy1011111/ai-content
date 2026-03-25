@@ -153,6 +153,76 @@ HTML_END`);
     expect(imageSelector.generateCoverImage.mock.calls[0][0]).toContain('不要做成正文配图拼贴');
   });
 
+  it('会在有真实素材图时优先复用真实图做封面', async () => {
+    const selectImage = jest.fn().mockResolvedValue('https://cdn.example.com/real-cover.png');
+    const generateCoverImage = jest.fn();
+    const { service, imageSelector } = createService({
+      selectImageImpl: selectImage,
+      generateCoverImageImpl: generateCoverImage,
+    });
+
+    const result = await (service as any).generateCoverImage({
+      topicTitle: '旧手机回收',
+      topicSummary: '抽屉里那台旧手机，到底该怎么处理',
+      keywords: ['旧手机', '回收'],
+      materialInfos: [
+        {
+          id: 'm-1',
+          title: '旧手机回收',
+          content: '这里有一张真实图片',
+          imageUrl: 'https://cdn.example.com/real-cover.png',
+          originalImageUrl: null,
+          hasImage: true,
+        },
+      ],
+      imageStylePrompt: '纪实摄影',
+      imageStyleParams: { ratio: '16:9' },
+      imageCreationEnabled: true,
+    });
+
+    expect(result).toBe('https://cdn.example.com/real-cover.png');
+    expect(imageSelector.selectImage).toHaveBeenCalled();
+    expect(imageSelector.generateCoverImage).not.toHaveBeenCalled();
+  });
+
+  it('会清理公众号 markdown 初稿中的重复段落和 AI 占位符', () => {
+    const { service } = createService();
+
+    const cleaned = (service as any).prepareWechatDraftMarkdown(`第一段：抽屉里的旧手机，像一块你不敢碰的记忆硬盘。
+
+[ai-image-旧手机回收海报]
+
+第二段：你明明知道该处理掉它，但每次拿起来又会犹豫。
+
+第二段：你明明知道该处理掉它，但每次拿起来又会犹豫。
+
+[real-image-旧手机抽屉特写]`);
+
+    expect(cleaned).toContain('第一段：抽屉里的旧手机');
+    expect(cleaned).toContain('第二段：你明明知道该处理掉它');
+    expect(cleaned).not.toContain('[ai-image-');
+    expect(cleaned).not.toContain('[real-image-');
+    expect(cleaned.match(/第二段：你明明知道该处理掉它/g)).toHaveLength(1);
+  });
+
+  it('会在公众号定稿阶段只保留第一张真实配图占位符', () => {
+    const { service } = createService();
+
+    const cleaned = (service as any).finalizeWechatMarkdown(`第一段内容。
+
+[real-image-旧手机抽屉特写]
+
+第二段内容。
+
+[ai-image-带文字的封面]
+
+[real-image-回收柜台]`);
+
+    expect(cleaned).toContain('[real-image-旧手机抽屉特写]');
+    expect(cleaned).not.toContain('[ai-image-带文字的封面]');
+    expect(cleaned).not.toContain('[real-image-回收柜台]');
+  });
+
   it('会清理中文段落首部空白和内联特效前后的误空格', () => {
     const { service } = createService();
 

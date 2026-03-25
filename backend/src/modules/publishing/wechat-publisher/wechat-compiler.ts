@@ -54,19 +54,21 @@ export class WechatCompiler {
         $('img').each((_index, img) => {
             const image = $(img);
             const currentAlt = image.attr('alt')?.trim();
-            const alt = currentAlt && currentAlt !== '正文配图' ? currentAlt : '';
 
-            if (!image.attr('alt')) {
-                image.attr('alt', '正文配图');
+            if (currentAlt === '正文配图') {
+                image.removeAttr('alt');
             }
 
             if (image.parent().prop('tagName')?.toLowerCase() !== 'figure') {
                 image.wrap('<figure class="wechat-figure"></figure>');
             }
+        });
 
-            const figure = image.closest('figure');
-            if (figure.find('figcaption').length === 0 && alt) {
-                figure.append(`<figcaption>${alt}</figcaption>`);
+        $('figcaption').each((_index, caption) => {
+            const node = $(caption);
+            const text = node.text().replace(/\s+/g, ' ').trim();
+            if (!text) {
+                node.remove();
             }
         });
 

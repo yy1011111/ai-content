@@ -6,7 +6,7 @@ export const WECHAT_DEFAULT_CSS = `
       "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     font-size: 17px;
     line-height: 1.95;
-    letter-spacing: 0.15px;
+    letter-spacing: 0.12px;
     word-break: break-word;
     background: #ffffff;
   }
@@ -27,7 +27,7 @@ export const WECHAT_DEFAULT_CSS = `
   .wechat-article section,
   .wechat-article article,
   .wechat-article div {
-    margin: 0 0 20px 0;
+    margin: 0 0 18px 0;
   }
 
   .wechat-article p {
@@ -35,22 +35,19 @@ export const WECHAT_DEFAULT_CSS = `
     color: #243041;
     font-size: 17px;
     line-height: 1.95;
-    text-align: justify;
+    text-align: left;
   }
 
   .wechat-article .wechat-lead {
-    margin-bottom: 22px;
-    padding: 18px 18px 16px;
-    border-radius: 18px;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-    color: #162131;
+    margin-bottom: 20px;
+    color: #111827;
     font-size: 18px;
-    line-height: 2;
+    line-height: 1.95;
     font-weight: 500;
   }
 
   .wechat-article h1 {
-    margin: 0 0 26px 0;
+    margin: 0 0 24px 0;
     color: #101828;
     font-size: 30px;
     line-height: 1.35;
@@ -59,17 +56,17 @@ export const WECHAT_DEFAULT_CSS = `
   }
 
   .wechat-article h2 {
-    margin: 34px 0 16px 0;
-    padding: 0 0 0 14px;
-    border-left: 5px solid #111827;
+    margin: 30px 0 14px 0;
+    padding: 0 0 0 12px;
+    border-left: 4px solid #111827;
     color: #101828;
-    font-size: 22px;
-    line-height: 1.5;
+    font-size: 21px;
+    line-height: 1.55;
     font-weight: 800;
   }
 
   .wechat-article h3 {
-    margin: 28px 0 14px 0;
+    margin: 24px 0 12px 0;
     color: #172033;
     font-size: 19px;
     line-height: 1.55;
@@ -77,7 +74,7 @@ export const WECHAT_DEFAULT_CSS = `
   }
 
   .wechat-article h4 {
-    margin: 22px 0 12px 0;
+    margin: 20px 0 10px 0;
     color: #172033;
     font-size: 17px;
     line-height: 1.6;
@@ -98,21 +95,11 @@ export const WECHAT_DEFAULT_CSS = `
 
   .wechat-article blockquote {
     margin: 24px 0;
-    padding: 18px 18px 16px;
-    border: none;
-    border-radius: 16px;
+    padding: 14px 16px;
+    border-left: 4px solid #94a3b8;
+    border-radius: 0 12px 12px 0;
     background: #f8fafc;
     color: #334155;
-    position: relative;
-  }
-
-  .wechat-article blockquote::before {
-    content: "“";
-    display: block;
-    color: #94a3b8;
-    font-size: 34px;
-    line-height: 1;
-    margin-bottom: 6px;
   }
 
   .wechat-article figure {
@@ -139,11 +126,11 @@ export const WECHAT_DEFAULT_CSS = `
 
   .wechat-article hr,
   .wechat-divider {
-    margin: 32px auto;
-    width: 72px;
+    margin: 28px auto;
+    width: 60px;
     height: 1px;
     border: none;
-    background: linear-gradient(90deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.28), rgba(15, 23, 42, 0));
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0), rgba(148, 163, 184, 0.9), rgba(148, 163, 184, 0));
   }
 
   .wechat-article strong {
