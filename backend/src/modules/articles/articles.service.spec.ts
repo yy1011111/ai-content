@@ -408,4 +408,43 @@ HTML_END`);
     expect(result.successCount).toBe(2);
     expect(result.generatedArticleIds).toEqual(['article-1', 'article-1']);
   });
+  it('runs a final polish pass for wechat markdown payloads', async () => {
+    const generate = jest.fn().mockResolvedValue(
+      JSON.stringify({
+        title: '更顺的版本',
+        content: '第一段更自然。\n\n第二段接着往下讲。',
+      }),
+    );
+    const { service, aiClient } = createService({ generateImpl: generate });
+
+    const result = await (service as any).polishWechatArticlePayload({
+      modelId: 'model-1',
+      topicTitle: '旧手机回收',
+      rewrittenTitle: '旧标题',
+      rewrittenContent: '第一段。\n\n第二段。',
+    });
+
+    expect(result.title).toBe('更顺的版本');
+    expect(result.content).toContain('第一段更自然');
+    expect(aiClient.generate).toHaveBeenCalledTimes(1);
+    expect(aiClient.generate.mock.calls[0][1][0].content).toContain('最后一遍“整篇统稿”');
+  });
+
+  it('falls back to rewritten payload when the final polish pass fails', async () => {
+    const generate = jest.fn().mockRejectedValue(new Error('network'));
+    const { service } = createService({ generateImpl: generate });
+
+    const result = await (service as any).polishWechatArticlePayload({
+      modelId: 'model-1',
+      topicTitle: '旧手机回收',
+      rewrittenTitle: '旧标题',
+      rewrittenContent: '第一段。\n\n第二段。',
+    });
+
+    expect(result).toEqual({
+      title: '旧标题',
+      content: '第一段。\n\n第二段。',
+      contentFormat: 'markdown',
+    });
+  });
 });
