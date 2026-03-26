@@ -88,10 +88,17 @@ const ARTICLE_HTML_MAX_TOKENS = 12000;
 const ARTICLE_HTML_CONTINUATION_MAX_TOKENS = 6000;
 const ARTICLE_REWRITE_MAX_TOKENS = 4500;
 const ARTICLE_POLISH_MAX_TOKENS = 4200;
+const ARTICLE_AUDIT_MAX_TOKENS = 1200;
 
 type HtmlValidationResult = {
     isComplete: boolean;
     reason: string;
+};
+
+type WechatArticleAuditResult = {
+    shouldRewrite: boolean;
+    issues: string[];
+    guidance: string[];
 };
 
 @Injectable()
@@ -955,98 +962,14 @@ ${params.materialContents}`;
             });
         }
 
-        return `【任务目标】请直接写成一篇适合微信公众号发布的正式成稿，不要提问，不要只给提纲。
-【本次写作信息】
-选题核心方向：${params.topicTitle}
-选题摘要：${params.topicSummary}
-关键词：${params.keywords.join(', ')}
-模板备注：${params.templateNotes || '无'}
-${cleanRetryInstruction}
-
-【写作前的内部动作（不要原样输出）】
-1. 先判断当前题材更偏事件型还是观点型。
-2. 事件型：区分已确认事实和未确认点，只把未确认内容写成疑点或背景。
-3. 观点型：不要硬编成新闻，把它落到真实的生活场景、关系和处境。
-4. 先找到这篇文章真正的刺点，也就是最扎心、最荒唐、最值得转发的那一下。
-5. 先形成一小段“私人吐槽底稿”，再翻译成可公开发布的公众号成稿。
-6. 标题先内部比较多种写法，再输出最强但不廉价的一版。
-
-【落笔要求】
-1. 开头先给画面、动作、细节、冲突或不舒服的瞬间，不要先讲空泛道理。
-2. 先写刺痛感，再写判断和解释。
-3. 全文至少自然带出以下五项中的三项：
-   - 一个具体场景
-   - 一个不太体面的真实念头
-   - 一个锋利但站得住的判断
-   - 一点作者自己的代入或暴露
-   - 一个大家都知道但很少说破的真相
-4. 至少 3 个小标题，段落短，适合手机阅读。
-5. 不要反复写“根据素材”“从内容可以看出”“这说明了”。
-6. 如需图片，只能使用 [real-image-详细描述] 或 [ai-image-详细描述]。
-
-【素材】
-以下是收集到的客观素材。请把它们内化成你的独立观察和判断，而不是机械复述：
-
-${params.materialContents}`;
-        const retryInstruction = params.retryReason
-            ? `\n【上次输出失败原因】：${params.retryReason}
-【本次补充要求】：
-1. 必须从头输出完整成稿，不要续写半截内容。
-2. ${params.contentType === 'xiaohongshu' ? '不要遗漏标题、开场钩子、核心观点和结尾标签。' : '必须覆盖模板中的全部模块，尤其不要省略底部总结、CTA、互动区等尾部结构。'}
-3. 如果输出过长，请压缩单段文案长度，而不是删除核心结构。\n`
-            : '';
-
-        if (params.contentType === 'xiaohongshu') {
-            return `【选题核心方向】：${params.topicTitle}
+        return `【选题核心方向】：${params.topicTitle}
 
 【选题分析或摘要】：${params.topicSummary}
 【相关关键词】：${params.keywords.join(', ')}
 【模板注意事项】：${params.templateNotes || '无'}
-${retryInstruction}
+${cleanRetryInstruction}
 
-以下是收集到的客观事实素材（请将它们内化为你的“独立观察”，用你的口吻表达出来，禁忌重复“基于素材”等新闻机器人的废话）：
-
-${params.materialContents}`;
-        }
-
-        return `【任务目标】
-请直接写成一篇适合微信公众号发布的正式成稿，不要提问，不要把任务退回来，不要只给提纲。
-
-【写作前的内部动作（不要原样输出）】
-1. 先判断当前更像“事件型输入”还是“观点型输入”。
-2. 如果是事件型输入：
-- 内部区分“已确认事实”和“未确认点”
-- 只把未确认内容当疑点或背景，不要写成定论
-- 自动挑选一个最值得写的角度，不要把所有素材平均铺开
-3. 如果是观点型输入：
-- 不要强行补成新闻事件
-- 把它当成一个表达命题，找到最贴近现实的常见处境、关系或情绪场景
-4. 先找到这篇文章真正的“刺点”，也就是最扎心、最荒唐、最值得转发的那一下。
-5. 在内部先形成一小段私人吐槽底稿，再把那股真实劲儿翻译成可发表的公众号文章。
-6. 标题先在内部快速比较多种写法，选最适合传播的一版输出；不要浮夸，不要廉价，不要营销号腔。
-
-【本次写作信息】
-选题核心方向：${params.topicTitle}
-选题分析或摘要：${params.topicSummary}
-相关关键词：${params.keywords.join(', ')}
-模板注意事项：${params.templateNotes || '无'}
-${retryInstruction}
-
-【落笔要求】
-1. 开头先给画面、动作、细节、代入感或不舒服的瞬间，不要先总结意义。
-2. 先写刺痛，再讲道理；先有人话，再有结构。
-3. 文章里至少自然带出下面 5 项中的 3 项：
-- 一个具体场景
-- 一个不太体面的真实念头
-- 一个锋利但站得住的判断
-- 一点作者自己的代入或暴露
-- 一个大家都知道但很少说破的真相
-4. 语言自然、像真人说话，允许少量讽刺、冷幽默和自嘲，但不要装深刻。
-5. 禁止常见 AI 腔和公文腔，例如“这背后折射出”“某种程度上”“值得深思的是”“归根结底”“从某种意义上说”“这件事给我们敲响了警钟”。
-6. 不要反复说“根据素材”“从上述内容可以看出”“这说明了”。
-
-【素材】
-以下是收集到的客观事实素材。请把它们内化成你的独立观察和判断，写成有作者存在感的成稿，而不是新闻搬运：
+以下是收集到的客观事实素材。请将它们内化为你的独立观察，用你的口吻表达出来，禁忌重复“基于素材”等新闻机器人的废话：
 
 ${params.materialContents}`;
     }
@@ -1496,11 +1419,19 @@ ${params.materialContents}`;
             draftContent: normalizedDraftContent,
         });
 
+        const auditResult = await this.auditWechatArticlePayload({
+            modelId: params.modelId,
+            topicTitle: params.topicTitle,
+            rewrittenTitle: markdownPayload.title,
+            rewrittenContent: markdownPayload.content,
+        });
+
         const polishedMarkdownPayload = await this.polishWechatArticlePayload({
             modelId: params.modelId,
             topicTitle: params.topicTitle,
             rewrittenTitle: markdownPayload.title,
             rewrittenContent: markdownPayload.content,
+            auditResult,
         });
 
         const normalizedMarkdownPayload = {
@@ -1584,6 +1515,7 @@ ${params.draftContent}`,
         topicTitle: string;
         rewrittenTitle: string;
         rewrittenContent: string;
+        auditResult: WechatArticleAuditResult;
     }): Promise<GeneratedArticlePayload> {
         try {
             const aiResponseText = await this.aiClient.generate(
@@ -1601,6 +1533,8 @@ ${params.draftContent}`,
 5. 默认不要小标题；如果实在需要，最多保留 1 个，而且必须真正承担转场作用。
 6. 优先用人话、短句、真判断。少写“这背后是”“这揭示了”“某种隐喻”“某种程度上”。
 7. 不要端着，不要写成媒体专栏，不要像在展示写作技巧。要像一个作者坐下来，顺着一口气把这件事讲透。
+8. 允许直接删掉弱段落、重复段落、花哨但没用的句子；宁可更短，也不要更假。
+9. 全文尽量围绕一条主线推进，不要并列堆 3 个案例，更不要把每段都写成“自成一体的小作文”。
 8. 不要输出 HTML，不要解释修改过程。
 
 【输出格式】
@@ -1618,7 +1552,13 @@ ${params.topicTitle}
 ${params.rewrittenTitle}
 
 【当前正文】
-${params.rewrittenContent}`,
+${params.rewrittenContent}
+
+【本轮审校发现的问题】
+${params.auditResult.issues.length > 0 ? params.auditResult.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n') : '未发现明确硬伤，但仍需继续压掉机械感和解释腔。'}
+
+【本轮重点处理方向】
+${params.auditResult.guidance.length > 0 ? params.auditResult.guidance.map((item, index) => `${index + 1}. ${item}`).join('\n') : '1. 保持主线推进\n2. 删掉花哨但没用的句子\n3. 改成更像真人一口气写完的成稿'}`,
                     },
                 ],
                 {
@@ -1639,6 +1579,83 @@ ${params.rewrittenContent}`,
         }
     }
 
+    private async auditWechatArticlePayload(params: {
+        modelId: string;
+        topicTitle: string;
+        rewrittenTitle: string;
+        rewrittenContent: string;
+    }): Promise<WechatArticleAuditResult> {
+        try {
+            const aiResponseText = await this.aiClient.generate(
+                params.modelId,
+                [
+                    {
+                        role: 'system',
+                        content: `你是一名对公众号正文极其挑剔的审校编辑，只做“问题诊断”，不重写正文。
+
+【审校目标】
+找出这篇稿子最影响可读性的硬伤，尤其关注：
+1. 机械感、任务感、答题感
+2. 像媒体评论或公号腔，而不像真人写作
+3. 同一层意思重复说两遍
+4. 每段都自成一体，缺少承接
+5. 过度修辞、比喻太多、像在展示文笔
+6. 并列堆案例、主线不清
+7. 小标题、生硬转折、金句插得太硬
+
+【输出要求】
+只返回 JSON：
+{"shouldRewrite":true,"issues":["问题1","问题2"],"guidance":["处理建议1","处理建议2"]}
+
+规则：
+- issues 最多 5 条，只写真正影响可读性的硬伤
+- guidance 最多 5 条，只写可执行的修改方向
+- 不要夸，不要复述正文，不要输出任何额外解释`,
+                    },
+                    {
+                        role: 'user',
+                        content: `请审校下面这篇公众号正文。
+
+【选题】
+${params.topicTitle}
+
+【标题】
+${params.rewrittenTitle}
+
+【正文】
+${params.rewrittenContent}`,
+                    },
+                ],
+                {
+                    temperature: 0.1,
+                    maxTokens: ARTICLE_AUDIT_MAX_TOKENS,
+                },
+            );
+
+            const parsed = JSON.parse(this.stripCodeFence(aiResponseText.trim())) as Partial<WechatArticleAuditResult>;
+            const issues = Array.isArray(parsed.issues)
+                ? parsed.issues.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 5)
+                : [];
+            const guidance = Array.isArray(parsed.guidance)
+                ? parsed.guidance.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 5)
+                : [];
+
+            return {
+                shouldRewrite: parsed.shouldRewrite !== false,
+                issues,
+                guidance,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '未知错误';
+            this.logger.warn(`公众号正文审校失败，回退到默认统稿方向：${message}`);
+            return {
+                shouldRewrite: true,
+                issues: [],
+                guidance: [],
+            };
+        }
+    }
+
     private buildWechatContinuousSystemPrompt(stylePrompt: string, articleSystemPrompt: string): string {
         const basePrompt = articleSystemPrompt.trim() || this.getDefaultArticleSystemPrompt();
         return `${basePrompt}
@@ -1646,12 +1663,13 @@ ${params.rewrittenContent}`,
 【本次生成规则】
 1. 这一步只负责把正文一口气写顺，先写成完整 markdown 成稿，不要输出 HTML，不要自己套模板，不要思考排版。
 2. 整篇文章必须像一篇自然连贯的公众号成稿，而不是按提纲填空、不是卡片拼接、不是一段一个观点标签。
- 3. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，全文最多 1-2 个。
- 4. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
- 5. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔、媒体评论腔。少用比喻，少用“这背后是……”之类的解释句。
- 6. 能用大白话讲清楚，就不要写成修辞表演。宁可直接，也不要精致得发假。
- 7. 正文里最多保留 0-1 个图片占位符；没有必要就不要插图。默认优先真实图片，不要为了排版硬凑 AI 图。
- 8. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
+3. 不要机械照着“案例1、案例2、案例3”去排练式展开。可以吸收爆点和情绪，但正文必须像真实作者顺着一个核心线索讲下去。
+4. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，全文最多 1 个。
+5. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
+6. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔、媒体评论腔。少用比喻，少用“这背后是……”之类的解释句。
+7. 能用大白话讲清楚，就不要写成修辞表演。宁可直接，也不要精致得发假。
+8. 正文里最多保留 0-1 个图片占位符；没有必要就不要插图。默认优先真实图片，不要为了排版硬凑 AI 图。
+9. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
 
 【补充风格】
 ${stylePrompt}`;
@@ -1677,12 +1695,14 @@ ${params.keywords.join('、') || '无'}
 【写作要求】
 1. 整篇文章要一气呵成，重点是“连贯”“顺着读下去”“像一个成熟作者真的写完了一篇文章”。
 2. 不要写成提纲，不要写成新闻综述，不要一段一个孤立结论，不要到处塞金句和空洞小标题。
+3. 全文最好围绕一个主案例或一条主判断推进，最多允许 1 个补充例子，不要并列堆出三个“都还行但都不够深”的案例。
 3. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
- 4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤，不要把全文重新概括一遍。
-5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1-2 个，而且必须真正承担转场作用。
+4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤，不要把全文重新概括一遍。
+5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1 个，而且必须真正承担转场作用。
 6. 每一段都要接住上一段，像自然往下讲，而不是重新起一个模块。
- 7. 语言要直接、自然、像真人在说话。不要一段一个漂亮比喻，不要频繁写“某种隐喻”“这背后是”“这揭示了”。
- 8. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+7. 语言要直接、自然、像真人在说话。不要一段一个漂亮比喻，不要频繁写“某种隐喻”“这背后是”“这揭示了”。
+8. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+9. 可以删掉不够强的材料，不需要把素材里的每一层信息都交代一遍。宁可少一点，也不要像拼装说明书。
 
 【素材】
 ${params.materialContents}
@@ -1785,7 +1805,31 @@ ${params.materialContents}
             cleanedBlocks.push(block);
         }
 
-        return cleanedBlocks.join('\n\n').trim();
+        return this.collapseRepeatedWechatSequence(cleanedBlocks).join('\n\n').trim();
+    }
+
+    private collapseRepeatedWechatSequence(blocks: string[]): string[] {
+        if (blocks.length < 6) {
+            return blocks;
+        }
+
+        const fingerprints = blocks.map((block) =>
+            block
+                .replace(/^#{1,6}\s+/gm, '')
+                .replace(/[*_`>#\-◆▌]/g, '')
+                .replace(/\s+/g, '')
+                .toLowerCase(),
+        );
+
+        for (let size = Math.floor(blocks.length / 2); size >= 3; size--) {
+            const first = fingerprints.slice(0, size).join('|');
+            const second = fingerprints.slice(size, size * 2).join('|');
+            if (first && first === second) {
+                return blocks.slice(0, size);
+            }
+        }
+
+        return blocks;
     }
 
     private async generateArticlePayload(params: {

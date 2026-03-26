@@ -223,6 +223,30 @@ HTML_END`);
     expect(cleaned).not.toContain('[real-image-回收柜台]');
   });
 
+  it('会在公众号定稿阶段砍掉整篇重复一次的正文', () => {
+    const { service } = createService();
+
+    const paragraphOne = '抽屉里的旧手机，很多时候不是忘了卖，而是不敢碰。';
+    const paragraphTwo = '你以为自己舍不得的是价格，后来才发现舍不得的是里面那堆没整理完的生活。';
+    const paragraphThree = '真正让人犹豫的，从来不是三十块钱，而是你根本不确定那些数据会流到哪去。';
+
+    const cleaned = (service as any).finalizeWechatMarkdown(`${paragraphOne}
+
+${paragraphTwo}
+
+${paragraphThree}
+
+${paragraphOne}
+
+${paragraphTwo}
+
+${paragraphThree}`);
+
+    expect(cleaned.match(/抽屉里的旧手机/g)).toHaveLength(1);
+    expect(cleaned.match(/你以为自己舍不得的是价格/g)).toHaveLength(1);
+    expect(cleaned.match(/真正让人犹豫的/g)).toHaveLength(1);
+  });
+
   it('会清理中文段落首部空白和内联特效前后的误空格', () => {
     const { service } = createService();
 
