@@ -436,7 +436,7 @@ export default function TemplatesPage() {
                                             <Icon icon="solar:document-text-linear" width={18} />
                                             录入建议
                                         </div>
-                                        <p>保留模板中的结构块，避免让 AI 每次自己重新拼版式。</p>
+                                        <p>保留模板里的结构块，避免让 AI 每次重新拼版式。</p>
                                         <p>如果某个模块必须存在，就保留该 HTML 结构，只把文案替换成更清晰的占位符。</p>
                                         <p>图片节点保留 <code>&lt;img src="..." /&gt;</code> 即可，后续由系统替换真实地址。</p>
                                     </CardBody>
