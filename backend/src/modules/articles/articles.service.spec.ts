@@ -1,4 +1,5 @@
 import { ArticlesService } from './articles.service';
+import { WechatCompiler } from '../publishing/wechat-publisher/wechat-compiler';
 
 describe('ArticlesService', () => {
   const createService = (options?: {
@@ -110,6 +111,52 @@ HTML_END`);
       { role: 'system', content: 'system' },
       { role: 'user', content: 'user\n\n【重试要求】：HTML 结尾缺少闭合标签，疑似被截断\n请重新完整输出整篇文章。' },
     ]);
+  });
+
+  it('公众号正文主链会收敛成初稿加一次统稿', async () => {
+    const generate = jest
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify({
+        title: '初稿标题',
+        content: '第一段先把事情讲出来。\n\n第二段继续往下讲。',
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        title: '定稿标题',
+        content: '第一段先把事情讲出来。\n\n第二段接着往下走，不再像答题。',
+      }));
+
+    const { service, aiClient } = createService({ generateImpl: generate });
+    const renderImages = jest
+      .spyOn(service as any, 'renderImages')
+      .mockResolvedValue({ content: '第一段先把事情讲出来。\n\n第二段接着往下走，不再像答题。', coverImage: null });
+    const compileSpy = jest
+      .spyOn(WechatCompiler, 'compile')
+      .mockResolvedValue('<p>编译后的正文</p>');
+
+    const result = await (service as any).generateWechatArticlePayload({
+      modelId: 'model-1',
+      topicTitle: '旧手机回收',
+      topicSummary: '回收价格低，但真正卡住人的不是钱。',
+      keywords: ['旧手机', '回收'],
+      materialContents: '素材一：报价很低。\n\n素材二：真正让人犹豫的是数据和记忆。',
+      stylePrompt: '像真人在说话。',
+      articleSystemPrompt: '先找爆点，再写成完整成稿。',
+      materialInfos: [],
+      imageStylePrompt: undefined,
+      imageStyleParams: undefined,
+      imageCreationEnabled: false,
+    });
+
+    expect(aiClient.generate).toHaveBeenCalledTimes(2);
+    expect(aiClient.generate.mock.calls[1][1][1].content).toContain('最后一遍统稿重写');
+    expect(aiClient.generate.mock.calls[1][1][1].content).toContain('当前初稿');
+    expect(renderImages).toHaveBeenCalledTimes(1);
+    expect(compileSpy).toHaveBeenCalledWith('第一段先把事情讲出来。\n\n第二段接着往下走，不再像答题。');
+    expect(result.title).toBe('定稿标题');
+    expect(result.content).toBe('<p>编译后的正文</p>');
+
+    renderImages.mockRestore();
+    compileSpy.mockRestore();
   });
 
   it('正文配图成功后不再把首图写入封面字段', async () => {

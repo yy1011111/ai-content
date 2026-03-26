@@ -86,19 +86,11 @@ const ARTICLE_MAX_GENERATION_ATTEMPTS = 3;
 const ARTICLE_MARKDOWN_MAX_TOKENS = 4000;
 const ARTICLE_HTML_MAX_TOKENS = 12000;
 const ARTICLE_HTML_CONTINUATION_MAX_TOKENS = 6000;
-const ARTICLE_REWRITE_MAX_TOKENS = 4500;
-const ARTICLE_POLISH_MAX_TOKENS = 4200;
-const ARTICLE_AUDIT_MAX_TOKENS = 1200;
+const ARTICLE_POLISH_MAX_TOKENS = 4500;
 
 type HtmlValidationResult = {
     isComplete: boolean;
     reason: string;
-};
-
-type WechatArticleAuditResult = {
-    shouldRewrite: boolean;
-    issues: string[];
-    guidance: string[];
 };
 
 @Injectable()
@@ -1412,26 +1404,11 @@ ${params.materialContents}`;
 
         const normalizedDraftContent = this.prepareWechatDraftMarkdown(markdownDraft.content);
 
-        const markdownPayload = await this.rewriteWechatArticlePayload({
+        const polishedMarkdownPayload = await this.polishWechatArticlePayload({
             modelId: params.modelId,
             topicTitle: params.topicTitle,
             draftTitle: markdownDraft.title,
             draftContent: normalizedDraftContent,
-        });
-
-        const auditResult = await this.auditWechatArticlePayload({
-            modelId: params.modelId,
-            topicTitle: params.topicTitle,
-            rewrittenTitle: markdownPayload.title,
-            rewrittenContent: markdownPayload.content,
-        });
-
-        const polishedMarkdownPayload = await this.polishWechatArticlePayload({
-            modelId: params.modelId,
-            topicTitle: params.topicTitle,
-            rewrittenTitle: markdownPayload.title,
-            rewrittenContent: markdownPayload.content,
-            auditResult,
         });
 
         const normalizedMarkdownPayload = {
@@ -1458,38 +1435,38 @@ ${params.materialContents}`;
         };
     }
 
-    private async rewriteWechatArticlePayload(params: {
+    private async polishWechatArticlePayload(params: {
         modelId: string;
         topicTitle: string;
         draftTitle: string;
         draftContent: string;
     }): Promise<GeneratedArticlePayload> {
-        const aiResponseText = await this.aiClient.generate(
-            params.modelId,
-            [
-                {
-                    role: 'system',
-                    content: `你是一名资深公众号主笔，现在只做一件事：把一篇“已经有料但写得发散、像拼装稿的初稿”，重写成一篇真正顺着读下去的公众号成稿。
+        try {
+            const aiResponseText = await this.aiClient.generate(
+                params.modelId,
+                [
+                    {
+                        role: 'system',
+                        content: `你是一名极其擅长公众号成稿统稿的总编，现在只做一遍“整篇统稿重写”。
 
-【改写目标】
-1. 保留原文的核心事实、判断和刺点，但把全文重新组织成一条往前推进的叙事/议论链。
-2. 消除“卡片感”“答题感”“一段一个结论”的拼装味，不能写成一节一节的素材堆叠。
-3. 默认不要加小标题；确实需要时，全文最多保留 1-2 个，而且必须真正推进内容，而不是给段落贴标签。
-4. 段落可以短，但段与段之间必须有承接，上一段自然把下一段带出来，不能像被硬切开。
-5. 优先把文章写成“能一口气读下去”的成稿，而不是“方便摘句”的卡片文。
- 6. 语言要像真人在讲，不要显摆文笔，不要连珠比喻，不要一段一个“精致句子”。
- 7. 少用“这背后是……”“这揭示了……”“某种隐喻”这种解释腔，不要写成媒体评论腔。
- 8. 结尾自然收束，不要口号，不要鸡汤，不要拔高。
- 9. 不要引入新事实，不要扩写成空话，不要重复同一个观点，不要把整篇文章再说一遍。
- 10. 这是正文重写，不要输出 HTML，不要解释你的改法。
+【任务目标】
+1. 不改核心事实、不改立场、不新增信息，只把这篇初稿统成一篇更像真人一口气写完的公众号成稿。
+2. 允许大幅重组段落顺序、删掉弱段落、删掉重复句、删掉花哨修辞，但不要写成另一篇新文章。
+3. 文章必须围绕一条主线推进，段与段自然咬合，不要“一段一个完整观点”，不要像在答题。
+4. 默认不要小标题；实在需要时最多保留 1 个，而且它必须真承担转场，不是装饰。
+5. 去掉机械感、解释腔、媒体述评腔、故作深沉的修辞腔，不要显摆文笔。
+6. 去掉重复段落、重复判断、重复比喻、重复收束，尤其不能把同一层意思换个说法再说一遍。
+7. 优先用人话、短句、真判断。少写“这背后是”“这揭示了”“某种隐喻”“某种程度上”。
+8. 不要端着，不要写成媒体专栏，不要像在展示写作技巧。要像一个作者坐下来，顺着一口气把这件事讲透。
+9. 不要输出 HTML，不要解释修改过程。
 
 【输出格式】
 只返回 JSON：
 {"title":"优化后的标题","content":"markdown 正文"}`,
-                },
-                {
-                    role: 'user',
-                    content: `请把下面这篇公众号初稿，改写成一篇更像“整篇写完的文章”。
+                    },
+                    {
+                        role: 'user',
+                        content: `请对下面这篇公众号初稿做最后一遍统稿重写，让它更自然、更顺、更像真人写完的成稿。
 
 【选题】
 ${params.topicTitle}
@@ -1498,160 +1475,30 @@ ${params.topicTitle}
 ${params.draftTitle}
 
 【当前初稿】
-${params.draftContent}`,
-                },
-            ],
-            {
-                temperature: 0.25,
-                maxTokens: ARTICLE_REWRITE_MAX_TOKENS,
-            },
-        );
+${params.draftContent}
 
-        return this.parseArticlePayload(aiResponseText, params.draftTitle, 'markdown');
-    }
-
-    private async polishWechatArticlePayload(params: {
-        modelId: string;
-        topicTitle: string;
-        rewrittenTitle: string;
-        rewrittenContent: string;
-        auditResult: WechatArticleAuditResult;
-    }): Promise<GeneratedArticlePayload> {
-        try {
-            const aiResponseText = await this.aiClient.generate(
-                params.modelId,
-                [
-                    {
-                        role: 'system',
-                        content: `你是一名极其擅长公众号成稿统稿的总编，现在只做最后一遍“整篇统稿”。
-
-【任务目标】
-1. 不改核心事实、不改立场、不新增信息，只把这篇已经成形的稿子统成更像真人一口气写完的文章。
-2. 去掉机械感、解释腔、媒体述评腔、故作深沉的修辞腔，不要显摆文笔。
-3. 去掉“像段子拼起来”“像一节一节答题”的感觉，让段与段自然咬合。
-4. 去掉重复段落、重复判断、重复比喻、重复收束，尤其不能把同一层意思换个说法再说一遍。
-5. 默认不要小标题；如果实在需要，最多保留 1 个，而且必须真正承担转场作用。
-6. 优先用人话、短句、真判断。少写“这背后是”“这揭示了”“某种隐喻”“某种程度上”。
-7. 不要端着，不要写成媒体专栏，不要像在展示写作技巧。要像一个作者坐下来，顺着一口气把这件事讲透。
-8. 允许直接删掉弱段落、重复段落、花哨但没用的句子；宁可更短，也不要更假。
-9. 全文尽量围绕一条主线推进，不要并列堆 3 个案例，更不要把每段都写成“自成一体的小作文”。
-8. 不要输出 HTML，不要解释修改过程。
-
-【输出格式】
-只返回 JSON：
-{"title":"优化后的标题","content":"markdown 正文"}`,
-                    },
-                    {
-                        role: 'user',
-                        content: `请对下面这篇公众号正文做最后一遍统稿，让它更自然、更顺、更像真人写完的成稿。
-
-【选题】
-${params.topicTitle}
-
-【当前标题】
-${params.rewrittenTitle}
-
-【当前正文】
-${params.rewrittenContent}
-
-【本轮审校发现的问题】
-${params.auditResult.issues.length > 0 ? params.auditResult.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n') : '未发现明确硬伤，但仍需继续压掉机械感和解释腔。'}
-
-【本轮重点处理方向】
-${params.auditResult.guidance.length > 0 ? params.auditResult.guidance.map((item, index) => `${index + 1}. ${item}`).join('\n') : '1. 保持主线推进\n2. 删掉花哨但没用的句子\n3. 改成更像真人一口气写完的成稿'}`,
+【重点处理方向】
+1. 去掉“像段子拼起来”“像一节一节答题”的感觉
+2. 去掉过度修辞和解释腔
+3. 去掉重复判断、重复段落、重复收束
+4. 把全文统成一条主线，而不是并列堆材料
+5. 最终读起来要像一个作者顺着一口气写完`,
                     },
                 ],
                 {
-                    temperature: 0.2,
+                    temperature: 0.25,
                     maxTokens: ARTICLE_POLISH_MAX_TOKENS,
                 },
             );
 
-            return this.parseArticlePayload(aiResponseText, params.rewrittenTitle, 'markdown');
+            return this.parseArticlePayload(aiResponseText, params.draftTitle, 'markdown');
         } catch (error) {
             const message = error instanceof Error ? error.message : '未知错误';
-            this.logger.warn(`公众号正文二次统稿失败，回退到重写稿：${message}`);
+            this.logger.warn(`公众号正文统稿失败，回退到初稿：${message}`);
             return {
-                title: params.rewrittenTitle,
-                content: params.rewrittenContent,
+                title: params.draftTitle,
+                content: params.draftContent,
                 contentFormat: 'markdown',
-            };
-        }
-    }
-
-    private async auditWechatArticlePayload(params: {
-        modelId: string;
-        topicTitle: string;
-        rewrittenTitle: string;
-        rewrittenContent: string;
-    }): Promise<WechatArticleAuditResult> {
-        try {
-            const aiResponseText = await this.aiClient.generate(
-                params.modelId,
-                [
-                    {
-                        role: 'system',
-                        content: `你是一名对公众号正文极其挑剔的审校编辑，只做“问题诊断”，不重写正文。
-
-【审校目标】
-找出这篇稿子最影响可读性的硬伤，尤其关注：
-1. 机械感、任务感、答题感
-2. 像媒体评论或公号腔，而不像真人写作
-3. 同一层意思重复说两遍
-4. 每段都自成一体，缺少承接
-5. 过度修辞、比喻太多、像在展示文笔
-6. 并列堆案例、主线不清
-7. 小标题、生硬转折、金句插得太硬
-
-【输出要求】
-只返回 JSON：
-{"shouldRewrite":true,"issues":["问题1","问题2"],"guidance":["处理建议1","处理建议2"]}
-
-规则：
-- issues 最多 5 条，只写真正影响可读性的硬伤
-- guidance 最多 5 条，只写可执行的修改方向
-- 不要夸，不要复述正文，不要输出任何额外解释`,
-                    },
-                    {
-                        role: 'user',
-                        content: `请审校下面这篇公众号正文。
-
-【选题】
-${params.topicTitle}
-
-【标题】
-${params.rewrittenTitle}
-
-【正文】
-${params.rewrittenContent}`,
-                    },
-                ],
-                {
-                    temperature: 0.1,
-                    maxTokens: ARTICLE_AUDIT_MAX_TOKENS,
-                },
-            );
-
-            const parsed = JSON.parse(this.stripCodeFence(aiResponseText.trim())) as Partial<WechatArticleAuditResult>;
-            const issues = Array.isArray(parsed.issues)
-                ? parsed.issues.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 5)
-                : [];
-            const guidance = Array.isArray(parsed.guidance)
-                ? parsed.guidance.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean).slice(0, 5)
-                : [];
-
-            return {
-                shouldRewrite: parsed.shouldRewrite !== false,
-                issues,
-                guidance,
-            };
-        } catch (error) {
-            const message = error instanceof Error ? error.message : '未知错误';
-            this.logger.warn(`公众号正文审校失败，回退到默认统稿方向：${message}`);
-            return {
-                shouldRewrite: true,
-                issues: [],
-                guidance: [],
             };
         }
     }
@@ -1664,12 +1511,13 @@ ${params.rewrittenContent}`,
 1. 这一步只负责把正文一口气写顺，先写成完整 markdown 成稿，不要输出 HTML，不要自己套模板，不要思考排版。
 2. 整篇文章必须像一篇自然连贯的公众号成稿，而不是按提纲填空、不是卡片拼接、不是一段一个观点标签。
 3. 不要机械照着“案例1、案例2、案例3”去排练式展开。可以吸收爆点和情绪，但正文必须像真实作者顺着一个核心线索讲下去。
-4. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，全文最多 1 个。
-5. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
-6. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔、媒体评论腔。少用比喻，少用“这背后是……”之类的解释句。
-7. 能用大白话讲清楚，就不要写成修辞表演。宁可直接，也不要精致得发假。
-8. 正文里最多保留 0-1 个图片占位符；没有必要就不要插图。默认优先真实图片，不要为了排版硬凑 AI 图。
-9. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
+4. 如果基础写作提示词里出现“标题先行、案例1/2/3、开场/收尾、检验清单”等结构，那只是你的内部工作法，不要求在成稿里逐项显形执行；一切以“读起来像完整文章”为最高优先级。
+5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，全文最多 1 个。
+6. 开头先把读者拉进一个具体瞬间或处境，中段持续推进，结尾自然收束，不要突然拔高，也不要强行上价值。
+7. 语言必须像真人写作，避免 AI 腔、汇报腔、新闻播报腔、媒体评论腔。少用比喻，少用“这背后是……”之类的解释句。
+8. 能用大白话讲清楚，就不要写成修辞表演。宁可直接，也不要精致得发假。
+9. 正文里最多保留 0-1 个图片占位符；没有必要就不要插图。默认优先真实图片，不要为了排版硬凑 AI 图。
+10. 如果需要图片，只能使用 [real-image-具体描述] 或 [ai-image-具体描述]。AI 图必须是纯视觉场景，严禁任何文字、水印、logo、按钮、截图感或小红书封面感。
 
 【补充风格】
 ${stylePrompt}`;
@@ -1696,13 +1544,14 @@ ${params.keywords.join('、') || '无'}
 1. 整篇文章要一气呵成，重点是“连贯”“顺着读下去”“像一个成熟作者真的写完了一篇文章”。
 2. 不要写成提纲，不要写成新闻综述，不要一段一个孤立结论，不要到处塞金句和空洞小标题。
 3. 全文最好围绕一个主案例或一条主判断推进，最多允许 1 个补充例子，不要并列堆出三个“都还行但都不够深”的案例。
-3. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
-4. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤，不要把全文重新概括一遍。
-5. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1 个，而且必须真正承担转场作用。
-6. 每一段都要接住上一段，像自然往下讲，而不是重新起一个模块。
-7. 语言要直接、自然、像真人在说话。不要一段一个漂亮比喻，不要频繁写“某种隐喻”“这背后是”“这揭示了”。
-8. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
-9. 可以删掉不够强的材料，不需要把素材里的每一层信息都交代一遍。宁可少一点，也不要像拼装说明书。
+4. 如果你脑子里已经形成了“标题、开头、案例、收尾”的步骤，只把它当成内部组织材料的方法，不要把正文写成一格一格的流程文。
+5. 默认写 1200-1800 字；手机阅读友好，段落短，但逻辑要连着走。
+6. 开头先抓人，中段持续推进，结尾自然收束。不要机械总结，不要硬塞鸡汤，不要把全文重新概括一遍。
+7. 默认不要加小标题；如果不用小标题更顺，就整篇直接写下去。确实需要时，最多 1 个，而且必须真正承担转场作用。
+8. 每一段都要接住上一段，像自然往下讲，而不是重新起一个模块。
+9. 语言要直接、自然、像真人在说话。不要一段一个漂亮比喻，不要频繁写“某种隐喻”“这背后是”“这揭示了”。
+10. 如果材料不完整，就只写能站住的部分；不确定的内容写成风险、疑点或处境，不要冒充事实。
+11. 可以删掉不够强的材料，不需要把素材里的每一层信息都交代一遍。宁可少一点，也不要像拼装说明书。
 
 【素材】
 ${params.materialContents}
